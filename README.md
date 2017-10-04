@@ -45,3 +45,9 @@ There ara also some example scripts that use xrdinfo package:
 * [xrd_subsystems_with_server.py](python/xrd_subsystems_with_server.py) - 
   Returns the list of all Subsystems in X-Road instance and additioally adding
   Security Servers to that list.
+
+Warning are disabled by default. Use the following command after importing
+xrdinfo to enable warnings:
+```python
+xrdinfo.DEBUG=True
+```

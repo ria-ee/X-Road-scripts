@@ -13,7 +13,7 @@ import zipfile
 from six import BytesIO
 
 # For module developement
-DEBUG = True
+DEBUG = False
 
 # Timeout for requests
 DEFAULT_TIMEOUT = 5.0
