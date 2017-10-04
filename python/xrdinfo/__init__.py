@@ -208,6 +208,7 @@ def subsystemsWithServer(sharedParams):
             for subsystem in member.findall("./subsystem"):
                 subsystemId = subsystem.attrib["id"]
                 subsystemCode = subsystem.find("./subsystemCode").text
+                serverFound = False
                 for server in root.findall("./securityServer[client='{}']".format(subsystemId)):
                     ownerId = server.find("./owner").text
                     owner = root.find("./member[@id='"+ownerId+"']")
@@ -216,7 +217,8 @@ def subsystemsWithServer(sharedParams):
                     serverCode = server.find("./serverCode").text
                     address = server.find("./address").text
                     yield (instance, memberClass, memberCode, subsystemCode, instance, ownerClass, ownerCode, serverCode, address)
-                else:
+                    serverFound = True
+                if not serverFound:
                     yield (instance, memberClass, memberCode, subsystemCode)
     except (TypeError, AttributeError) as e:
         if DEBUG:
