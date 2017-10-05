@@ -40,6 +40,10 @@ if __name__ == '__main__':
 
     sharedParams = xrdinfo.sharedParamsSS(addr=args.url, instance=instance, timeout=timeout, verify=verify, cert=cert)
 
+    if six.PY2:
+        # Convert to unicode
+        args.client = args.client.decode('utf-8')
+
     client = args.client.split('/')
     if not(len(client) in (3,4)):
         parser.print_help()
