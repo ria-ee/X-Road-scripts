@@ -7,18 +7,19 @@ import requests
 import socket
 import six.moves.urllib.parse as urlparse
 import sys
+import os
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from six import BytesIO
 
 # For module developement
-DEBUG = False
+DEBUG = os.getenv('XRDINFO_DEBUG', False)
 
 # Timeout for requests
 DEFAULT_TIMEOUT = 5.0
 
-METHODS_MEMBER_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
+REQUEST_MEMBER_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope
         xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
@@ -40,12 +41,12 @@ METHODS_MEMBER_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
         <xroad:protocolVersion>4.0</xroad:protocolVersion>
     </SOAP-ENV:Header>
     <SOAP-ENV:Body>
-        <xroad:{method}/>
+{body}
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 """
 
-METHODS_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
+REQUEST_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope
         xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
@@ -68,10 +69,20 @@ METHODS_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
         <xroad:protocolVersion>4.0</xroad:protocolVersion>
     </SOAP-ENV:Header>
     <SOAP-ENV:Body>
-        <xroad:{method}/>
+{body}
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 """
+
+METHODS_BODY_TEMPL = u"""        <xroad:{method}/>"""
+
+GETWSDL_SERVICE = u"getWsdl"
+
+GETWSDL_BODY_TEMPL = u"""        <xroad:getWsdl>
+            <xroad:serviceCode>{serviceCode}</xroad:serviceCode>
+            <xroad:serviceVersion>{serviceVersion}</xroad:serviceVersion>
+        </xroad:getWsdl>"""
+
 
 # Namespace of X-Road schema
 NS = {'xrd': 'http://x-road.eu/xsd/xroad.xsd', 'id': 'http://x-road.eu/xsd/identifiers'}
@@ -109,7 +120,7 @@ def sharedParamsSS(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, c
         return sharedParams
     except (requests.exceptions.RequestException, zipfile.BadZipfile, KeyError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return None
 
 def sharedParamsCS(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -137,7 +148,7 @@ def sharedParamsCS(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         return sharedParams
     except (requests.exceptions.RequestException, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def subsystems(sharedParams):
@@ -153,7 +164,7 @@ def subsystems(sharedParams):
                 yield (instance, memberClass, memberCode, subsystemCode)
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def subsystemsWithMembername(sharedParams):
@@ -171,7 +182,7 @@ def subsystemsWithMembername(sharedParams):
                 yield (instance, memberClass, memberCode, subsystemCode, memberName)
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def registeredSubsystems(sharedParams):
@@ -190,7 +201,7 @@ def registeredSubsystems(sharedParams):
                     yield (instance, memberClass, memberCode, subsystemCode)
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def subsystemsWithServer(sharedParams):
@@ -222,7 +233,7 @@ def subsystemsWithServer(sharedParams):
                     yield (instance, memberClass, memberCode, subsystemCode)
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def servers(sharedParams):
@@ -240,7 +251,7 @@ def servers(sharedParams):
             yield (instance, memberClass, memberCode, serverCode, address)
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def serversIPs(sharedParams):
@@ -256,7 +267,7 @@ def serversIPs(sharedParams):
                 pass
     except (TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
 
 def methods(addr, client, service, method='listMethods', timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -268,22 +279,23 @@ def methods(addr, client, service, method='listMethods', timeout=DEFAULT_TIMEOUT
     elif not urlparse.urlsplit(url).scheme:
         url = "http://"+url
 
-    if len(client) == 3 and len(service) == 4:
-        data = METHODS_MEMBER_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=method)
+    body = METHODS_BODY_TEMPL.format(method=method)
+    if (len(client) == 3 or client[3] == '') and len(service) == 4:
+        data = REQUEST_MEMBER_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=method, body=body)
     elif len(client) == 4 and len(service) == 4:
-        data = METHODS_SUBSYSTEM_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=method)
+        data = REQUEST_SUBSYSTEM_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=method, body=body)
     else:
         return
 
     headers = {'content-type': 'text/xml'}
     try:
-        listMethodsResponse = requests.post(url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify, cert=cert)
-        listMethodsResponse.raise_for_status()
+        methodsResponse = requests.post(url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify, cert=cert)
+        methodsResponse.raise_for_status()
         # Some servers might return multipart message.
-        envel = re.search("<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>", listMethodsResponse.text, re.DOTALL) 
+        envel = re.search("<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>", methodsResponse.text, re.DOTALL) 
         root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
         if DEBUG and root.find(".//faultstring") is not None:
-            sys.stderr.write("WARNING: SOAP FAULT: {}\n".format(root.find(".//faultstring").text))
+            sys.stderr.write(u"WARNING: SOAP FAULT: {}\n".format(root.find(".//faultstring").text))
         for service in root.findall(".//xrd:{}Response/xrd:service".format(method), NS):
             method = {}
             # Elements subsystemCode and serviceVersion may be missing.
@@ -296,8 +308,44 @@ def methods(addr, client, service, method='listMethods', timeout=DEFAULT_TIMEOUT
             yield method
     except (requests.exceptions.RequestException, TypeError, AttributeError) as e:
         if DEBUG:
-            sys.stderr.write("WARNING: {}: {}\n".format(type(e).__name__, e))
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
         return
+
+def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+    """Get X-Road getWsdl response."""
+    url = addr
+    # Add HTTP/HTTPS scheme if missing
+    if not urlparse.urlsplit(url).scheme and (verify or cert):
+        url = "https://"+url
+    elif not urlparse.urlsplit(url).scheme:
+        url = "http://"+url
+
+    body = GETWSDL_BODY_TEMPL.format(serviceCode=service[4], serviceVersion=service[5])
+    if (len(client) == 3 or client[3] == '') and len(service) == 6:
+        data = REQUEST_MEMBER_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=GETWSDL_SERVICE, body=body)
+    elif len(client) == 4 and len(service) == 6:
+        data = REQUEST_SUBSYSTEM_TEMPL.format(client=client, service=service, uuid=uuid.uuid4(), method=GETWSDL_SERVICE, body=body)
+    else:
+        return
+
+    headers = {'content-type': 'text/xml'}
+    try:
+        wsdlResponse = requests.post(url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify, cert=cert)
+        wsdlResponse.raise_for_status()
+        
+        resp = re.search("--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>.+--xroad.+content-type:text/xml\r\n\r\n(.+)\r\n--xroad.+", wsdlResponse.text, re.DOTALL)
+        if resp:
+            return resp.group(1)
+        elif DEBUG:
+            envel = re.search("<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>", wsdlResponse.text, re.DOTALL) 
+            root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+            if root.find(".//faultstring") is not None:
+                sys.stderr.write(u"WARNING: SOAP FAULT: {}\n".format(root.find(".//faultstring").text))
+        return None
+    except (requests.exceptions.RequestException, TypeError, AttributeError) as e:
+        if DEBUG:
+            sys.stderr.write(u"WARNING: {}: {}\n".format(type(e).__name__, e))
+        return None
 
 def stringify(list):
     """Convert list/tuple to slash separated string."""

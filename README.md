@@ -12,14 +12,15 @@ contents of messagelog files.
 additionally outputs message SigningTime.
 
 ## Global Configuration and Metadata services
-[xrdinfo](python/xrdinfo) - Python package that can be imported and used in
+[xrdinfo](xrdinfo/xrdinfo.py) - Python module that can be imported and used in
 any Python2.7+ or Python3 application. It implements:
 * loading of global configuration from Security Server, Central Server or
   Configuration Proxy;
 * parsing of shared_params.xml;
-* listMethods and allowedMethods X-Road requests.
+* listMethods and allowedMethods X-Road requests;
+* getWsdl X-Road request.
 
-There ara also some example scripts that use xrdinfo package:
+There ara also some example scripts that use xrdinfo module:
 * [xrd_all_methods.py](python/xrd_all_methods.py) - Returns the list of all
   methods (services) in X-Road instance.
 * [xrd_all_methods_allowed.py](python/xrd_all_methods_allowed.py) - Returns
@@ -40,14 +41,16 @@ There ara also some example scripts that use xrdinfo package:
 * [xrd_subsystems.py](python/xrd_subsystems.py) - Returns the list of all
   Subsystems in X-Road instance.
 * [xrd_subsystems_with_membername.py](python/xrd_subsystems_with_membername.py) -
-  Returns the list of all Subsystems in X-Road instance and additioally adding
+  Returns the list of all Subsystems in X-Road instance and additionally adding
   Member names to that list.
 * [xrd_subsystems_with_server.py](python/xrd_subsystems_with_server.py) - 
-  Returns the list of all Subsystems in X-Road instance and additioally adding
+  Returns the list of all Subsystems in X-Road instance and additionally adding
   Security Servers to that list.
+* [xrd_wsdl.py](python/xrd_wsdl.py) - Returns the service
+  WSDL using X-Road request.
 
-Warning are disabled by default. Use the following command after importing
-xrdinfo to enable warnings:
+Warning are disabled by default. Set environmental variable XRDINFO_DEBUG=True
+or use the following command after importing xrdinfo to enable warnings:
 ```python
 xrdinfo.DEBUG=True
 ```

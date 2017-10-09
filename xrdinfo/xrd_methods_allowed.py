@@ -15,7 +15,7 @@ if __name__ == '__main__':
     )
     parser.add_argument('url', metavar='SERVER_URL', help='URL of local Security Server accepting X-Road requests.')
     parser.add_argument('client', metavar='CLIENT', help='slash separated Client identifier (e.g. "INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE" or "INSTANCE/MEMBER_CLASS/MEMBER_CODE").')
-    parser.add_argument('service', metavar='SERVICE', help='slash separated Client identifier (e.g. "INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE").')
+    parser.add_argument('service', metavar='SERVICE', help='slash separated Service identifier (e.g. "INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE").')
     parser.add_argument('-t', metavar='TIMEOUT', help='timeout for HTTP query', type=float)
     parser.add_argument('--verify', metavar='CERT_PATH', help='validate peer TLS certificate using CA certificate file.')
     parser.add_argument('--cert', metavar='CERT_PATH', help='use TLS certificate for HTTPS requests.')
