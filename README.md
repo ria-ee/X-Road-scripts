@@ -46,11 +46,21 @@ There ara also some example scripts that use xrdinfo module:
 * [xrd_subsystems_with_server.py](xrdinfo/xrd_subsystems_with_server.py) - 
   Returns the list of all Subsystems in X-Road instance and additionally adding
   Security Servers to that list.
-* [xrd_wsdl.py](xrdinfo/xrd_wsdl.py) - Returns the service
-  WSDL using X-Road request.
+* [xrd_wsdl.py](xrdinfo/xrd_wsdl.py) - Returns the service WSDL using X-Road
+  request. This script can be useful when http://SECURITYSERVER/wsdl service is
+  disabled or TLS authentication is required to access Security Server.
 
 Warning are disabled by default. Set environmental variable `XRDINFO_DEBUG=True`
 or use the following command after importing xrdinfo to enable warnings:
 ```python
 xrdinfo.DEBUG=True
 ```
+
+Provided scripts support TLS authentication with Security Server. Self-signed
+key and certificate can be created with openssl:
+```
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout privateKey.key -out certificate.crt
+```
+If Security Server requires TLS authentication then you can add your TLS
+certificate in Security Server administration interface: MEMBER/SUBSYSTEM ->
+Internal Servers -> INTERNAL TLS CERTIFICATES
