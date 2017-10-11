@@ -3,6 +3,15 @@
 This repository contains helper scripts that can simplify usage and
 administration of X-Road.
 
+Provided scripts support TLS authentication with Security Server. Self-signed
+key and certificate can be created with openssl:
+```
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout privateKey.key -out certificate.crt
+```
+If Security Server requires TLS authentication then you can add your TLS
+certificate in Security Server administration interface: MEMBER/SUBSYSTEM ->
+Internal Servers -> INTERNAL TLS CERTIFICATES
+
 ## Messagelog:
 [cat_mlog.sh](messagelog/cat_mlog.sh) - This script prints the contents of archived
 X-Road messagelog files to STDOUT. Therefore providing a way to "grep" the
@@ -56,11 +65,19 @@ or use the following command after importing xrdinfo to enable warnings:
 xrdinfo.DEBUG=True
 ```
 
-Provided scripts support TLS authentication with Security Server. Self-signed
-key and certificate can be created with openssl:
-```
-openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout privateKey.key -out certificate.crt
-```
-If Security Server requires TLS authentication then you can add your TLS
-certificate in Security Server administration interface: MEMBER/SUBSYSTEM ->
-Internal Servers -> INTERNAL TLS CERTIFICATES
+## Health and Environment monitoring
+[metrics.py](zabbix/metrics.py) - X-Road Health and Environment monitoring
+collector for Zabbix. Can be used by:
+* Central monitoring to collect Environmental and Health data about all
+  Security Servers in X-Road instance.
+* Security Server owners to collect Environmental data of their Security Server.
+* X-Road members to collect other members Health data.
+
+[zabbix_cron.sh](zabbix/zabbix_cron.sh) - Sample shell script that can be
+executed from crontab to periodically collect the data.
+
+Use the provided examples to create your configuration file:
+* [metrics.cfg_example](zabbix/metrics.cfg_example) - Example configuration
+  file.
+* [metrics.cfg_example](zabbix/metrics.cfg_local_example) - Example
+  configuration file for local Security Server monitoring.

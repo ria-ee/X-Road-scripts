@@ -1,0 +1,38 @@
+# An example for central monitoring client that can collect data from all servers in X-Road instance
+
+[metrics]
+# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+DEBUG = 1
+
+# Zabbix configuration
+ZABBIX_URL = https://myzabbix.server/
+ZABBIX_USER = ZABBIX_USER
+ZABBIX_PASS = ZABBIX_PASS
+
+# EnvMon template configuration
+ENVMON_TEMPLATE_ID = 10242
+ENVMON_TEMPLATE_NAME = X-Road Environmental monitoring
+
+# Security server URL used by Central monitoring:
+SERVER_URL = http://xtee9.ci.kit
+
+# Path to TLS certificate and key in case when Security Server requires TLS authentication
+#TLS_CERT = certs/my.crt
+#TLS_KEY = certs/my.key
+
+# Client subsystem/member that performs health data collection:
+MONITORING_CLIENT_INST = XTEE-CI-XM
+MONITORING_CLIENT_CLASS = GOV
+MONITORING_CLIENT_MEMBER = 00000001
+MONITORING_CLIENT_SUBSYSTEM = Central monitoring client
+
+# How many threads to use for data querying.
+THREAD_COUNT = 5
+
+# Timeout for http requests
+TIMEOUT = 15.0
+
+# List of servers to collect data from
+# If not specified then list is expected from STDIN
+#SERVERS = XTEE-CI-CUST/GOV/00000001/00000001_1/xtee14.ci.kit
+#    XTEE-CI-CUST/COM/00000002/00000002_1/xtee15.ci.kit
