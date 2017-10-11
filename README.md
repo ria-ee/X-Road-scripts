@@ -79,5 +79,5 @@ executed from crontab to periodically collect the data.
 Use the provided examples to create your configuration file:
 * [metrics.cfg_example](zabbix/metrics.cfg_example) - Example configuration
   file.
-* [metrics.cfg_example](zabbix/metrics.cfg_local_example) - Example
+* [metrics.cfg_local_example](zabbix/metrics.cfg_local_example) - Example
   configuration file for local Security Server monitoring.
