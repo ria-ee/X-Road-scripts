@@ -81,3 +81,7 @@ Use the provided examples to create your configuration file:
   file.
 * [metrics.cfg_local_example](zabbix/metrics.cfg_local_example) - Example
   configuration file for local Security Server monitoring.
+
+Environment monitoring is using Zabbix template
+[envmon_template.xml](zabbix/envmon_template.xml) that should be imported
+into Zabbix prior to execution of the collector.
