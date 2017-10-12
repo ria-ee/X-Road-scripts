@@ -257,12 +257,19 @@ ENVMON_REQUEST_MEMBER_TEMPLATE = u"""<SOAP-ENV:Envelope
 """
 
 
-def safe_print(content):
+printLock = threading.Lock()
+def print_debug(content):
     """Thread safe and unicode safe print function."""
-    if six.PY2:
-        print(u"{}\n".format(content)),
-    else:
-        print(content)
+    content = u"{}: {}".format(threading.currentThread().getName(), content)
+    with printLock:
+        if six.PY2:
+            print(content.encode('utf-8'))
+        else:
+            print(content)
+
+def print_error(content):
+    """Thread safe and unicode safe print function."""
+    sys.stderr.write(u"{}: ERROR: '{}'\n".format(threading.currentThread().getName(), content))
 
 def loadConf(confArg):
     """ Load configuration from file."""
@@ -275,17 +282,17 @@ def loadConf(confArg):
     try:
         config.read(confName)
     except ConfigParser.Error as e:
-        sys.stderr.write(u"ERROR: Cannot load configuration '{}'\nDetail: {}\n".format(confName, e))
+        print_error(u"Cannot load configuration '{}'\nDetail: {}\n".format(confName, e))
         exit(1)
 
     if CONF_SECTION not in config.sections():
         if confArg is None:
             # Default configuration file may be missing if program configuration is up to date
-            if CONF['DEBUG']: safe_print(u"Configuration not found, using default values.")
+            if CONF['DEBUG']: print_debug(u"Configuration not found, using default values.")
             return
         else:
             # User provided configuration is incorrect
-            sys.stderr.write(u"ERROR: No [{}] section found in configuration file '{}'.\n".format(CONF_SECTION, confName))
+            print_error(u"No [{}] section found in configuration file '{}'.\n".format(CONF_SECTION, confName))
             exit(1)
 
     # All items found in configuration file
@@ -312,10 +319,10 @@ def loadConf(confArg):
         if 'TIMEOUT'.lower() in confItems: CONF['TIMEOUT'] = config.getfloat(CONF_SECTION, 'TIMEOUT')
         if 'SERVERS'.lower() in confItems: CONF['SERVERS'] = config.get(CONF_SECTION, 'SERVERS')
     except ValueError as e:
-        sys.stderr.write(u"ERROR: Incorrect value found in configuration file '{}'.\nDetail: {}\n".format(confName, e))
+        print_error(u"Incorrect value found in configuration file '{}'.\nDetail: {}\n".format(confName, e))
         exit(1)
 
-    if CONF['DEBUG']: safe_print(u"Configuration loaded from '{}'.".format(confName))
+    if CONF['DEBUG']: print_debug(u"Configuration loaded from '{}'.".format(confName))
 
 def getTemplateName(templateId):
     """Query Template name from Zabbix."""
@@ -328,15 +335,15 @@ def getTemplateName(templateId):
             return None
         return template[0]['host']
     except Exception as e:
-        if CONF['DEBUG'] > 1: safe_print(u"getTemplateName: {}".format(e))
+        if CONF['DEBUG'] > 1: print_debug(u"getTemplateName: {}".format(e))
         return None
 
-def checkTemplate(threadName, hostId, parentTemplates):
+def checkTemplate(hostId, parentTemplates):
     """Check if EnvMon Template is added to Host and add the Host if neccessary.""" 
     parentTemplateIds = [item['templateid'] for item in parentTemplates]
     if CONF['ENVMON_TEMPLATE_ID'] not in parentTemplateIds:
         # Add template to host
-        if CONF['DEBUG']: safe_print(u"{}: Adding EnvMon Template to HostId '{}' to Zabbix.".format(threadName, hostId))
+        if CONF['DEBUG']: print_debug(u"Adding EnvMon Template to HostId '{}' to Zabbix.".format(hostId))
         try:
             result = zapi.host.update(
                 hostid = hostId,
@@ -349,11 +356,11 @@ def checkTemplate(threadName, hostId, parentTemplates):
             if not result['hostids'][0] == hostId:
                 return None
         except Exception as e:
-            if CONF['DEBUG'] > 1: safe_print(u"checkTemplate: {}".format(e))
+            if CONF['DEBUG'] > 1: print_debug(u"checkTemplate: {}".format(e))
             return None
     return True
 
-def getHost(threadName, hostName):
+def getHost(hostName):
     """Query Host data from Zabbix."""
     try:
         host = zapi.host.get(
@@ -367,10 +374,10 @@ def getHost(threadName, hostName):
             return None
         return host[0]
     except Exception as e:
-        if CONF['DEBUG'] > 1: safe_print(u"{}: getHost: {}".format(threadName, e))
+        if CONF['DEBUG'] > 1: print_debug(u"getHost: {}".format(e))
         return None
 
-def addHost(threadName, hostName, hostVisibleName):
+def addHost(hostName, hostVisibleName):
     """Add Host to Zabbix."""
     try:
         result = zapi.host.create(
@@ -400,19 +407,19 @@ def addHost(threadName, hostName, hostVisibleName):
         )
         return result['hostids'][0]
     except Exception as e:
-        if CONF['DEBUG'] > 1: safe_print(u"{}: addHost: {}".format(threadName, e))
+        if CONF['DEBUG'] > 1: print_debug(u"addHost: {}".format(e))
         return None
 
-def checkHost(threadName, hostName, hostVisibleName):
+def checkHost(hostName, hostVisibleName):
     """Check if Host is added to Zabbix and add the Host if neccessary."""
-    hostData = getHost(threadName, hostName)
+    hostData = getHost(hostName)
     if hostData is None:
-        if CONF['DEBUG']: safe_print(u"{}: Adding Host '{}' to Zabbix.".format(threadName, hostName))
-        if addHost(threadName, hostName, hostVisibleName):
-            hostData = getHost(threadName, hostName)
+        if CONF['DEBUG']: print_debug(u"Adding Host '{}' to Zabbix.".format(hostName))
+        if addHost(hostName, hostVisibleName):
+            hostData = getHost(hostName)
     return hostData
 
-def addApp(threadName, hostId, app):
+def addApp(hostId, app):
     """Add Application to Zabbix."""
     try:
         result = zapi.application.create(
@@ -421,24 +428,24 @@ def addApp(threadName, hostId, app):
         )
         return result['applicationids']
     except Exception as e:
-        if CONF['DEBUG'] > 1: safe_print(u"{}: addApp: {}".format(threadName, e))
+        if CONF['DEBUG'] > 1: print_debug(u"addApp: {}".format(e))
         return None
 
-def checkApp(threadName, hostId, hostApps, app):
+def checkApp(hostId, hostApps, app):
     """Check if Application is already added to the host, and add that application if neccessary.
        Return updated dict hostApps.
     """
     if app not in hostApps.keys():
-        if CONF['DEBUG']: safe_print(u"{}: Adding Application: '{}' for hostId '{}'.".format(threadName, app, hostId))
-        result = addApp(threadName, hostId, app)
+        if CONF['DEBUG']: print_debug(u"Adding Application: '{}' for hostId '{}'.".format(app, hostId))
+        result = addApp(hostId, app)
         try:
             hostApps[app] = result[0]
         except Exception as e:
-            if CONF['DEBUG'] > 1: safe_print(u"{}: addHostApp: {}".format(threadName, e))
+            if CONF['DEBUG'] > 1: print_debug(u"addHostApp: {}".format(e))
             return None
     return hostApps
 
-def addItem(threadName, hostId, item, app):
+def addItem(hostId, item, app):
     """Add Item to Zabbix."""
     try:
         apps = []
@@ -457,27 +464,27 @@ def addItem(threadName, hostId, item, app):
         )
         return result['itemids']
     except Exception as e:
-        if CONF['DEBUG'] > 1: safe_print(u"{}: addItem: {}".format(threadName, e))
+        if CONF['DEBUG'] > 1: print_debug(u"addItem: {}".format(e))
         return None
 
-def checkServerItems(threadName, hostId, hostItems):
+def checkServerItems(hostId, hostItems):
     """Check if Server Items are already added to the Host, and adds missing Items."""
     for item in SERVER_HEALTH_ITEMS:
         if item['key'] not in hostItems:
-            if CONF['DEBUG']: safe_print(u"{}: Adding item: '{}' for hostId '{}'.".format(threadName, item['key'], hostId))
-            if addItem(threadName, hostId, item, None) is None:
+            if CONF['DEBUG']: print_debug(u"Adding item: '{}' for hostId '{}'.".format(item['key'], hostId))
+            if addItem(hostId, item, None) is None:
                 return None
     return True
 
-def checkServiceItems(threadName, hostId, hostItems, serviceName, serviceKey, appId):
+def checkServiceItems(hostId, hostItems, serviceName, serviceKey, appId):
     """Check if Service Items are already added to the Host, and adds missing Items."""
     for constItem in SERVICE_HEALTH_ITEMS:
         item=constItem.copy()
         item['name'] = u"{}[{}]".format(serviceName, item['key'])
         item['key'] = u"{}[{}]".format(serviceKey, item['key'])
         if item['key'] not in hostItems:
-            if CONF['DEBUG']: safe_print(u"{}: Adding item: '{}' for hostId '{}'.".format(threadName, item['key'], hostId))
-            if addItem(threadName, hostId, item, appId) is None:
+            if CONF['DEBUG']: print_debug(u"Adding item: '{}' for hostId '{}'.".format(item['key'], hostId))
+            if addItem(hostId, item, appId) is None:
                 return None
     return True
 
@@ -497,7 +504,7 @@ def getServiceName(service):
     serviceVersion = elem.text if elem is not None else ''
     return u"{}/{}/{}/{}/{}/{}".format(xRoadInstance, memberClass, memberCode, subsystemCode, serviceCode, serviceVersion)
 
-def getMetric(threadName, node, server):
+def getMetric(node, server):
     """Convert XML metric to ZabbixMetric.
        Return Zabbix packet elements.
     """
@@ -512,7 +519,7 @@ def getMetric(threadName, node, server):
             p.append(ZabbixMetric(server, name, node.find("./m:value", NS).text))
             return p
         except AttributeError:
-            if CONF['DEBUG'] > 1: safe_print(u"{}: getMetric: Incorect node: {}".format(threadName, ET.tostring(node)))
+            if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
             return None
     elif node.tag == nsp+"histogramMetric":
         try:
@@ -525,12 +532,12 @@ def getMetric(threadName, node, server):
             p.append(ZabbixMetric(server, name+"_stddev", node.find("./m:stddev", NS).text))
             return p
         except AttributeError:
-            if CONF['DEBUG'] > 1: safe_print(u"{}: getMetric: Incorect node: {}".format(threadName, ET.tostring(node)))
+            if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
             return None
     else:
         return None
 
-def getXRoadPackages(threadName, node, server):
+def getXRoadPackages(node, server):
     """Convert XML Packages metric to ZabbixMetric (includes only X-Road packages)
        Return Zabbix packet elements.
     """
@@ -546,10 +553,10 @@ def getXRoadPackages(threadName, node, server):
         p.append(ZabbixMetric(server, name, data))
         return p
     except AttributeError:
-        if CONF['DEBUG'] > 1: safe_print(u"{}: getXRoadPackages: Incorect node: {}".format(threadName, ET.tostring(node)))
+        if CONF['DEBUG'] > 1: print_debug(u"getXRoadPackages: Incorect node: {}".format(ET.tostring(node)))
         return None
 
-def hostMon(threadName, serverData):
+def hostMon(serverData):
     """Query Host monitoring data (Health or EnvMon) and save to Zabbix."""
     # Examples of serverData:
     # XTEE-CI-XM/GOV/00000000/00000000_1/xtee8.ci.kit
@@ -559,23 +566,23 @@ def hostMon(threadName, serverData):
     m = re.match("^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$", serverData)
 
     if m is None or m.lastindex != 5:
-        sys.stderr.write(u"{}: ERROR: Incorrect server string '{}'!\n".format(threadName, serverData))
+        print_error(u"Incorrect server string '{}'!\n".format(serverData))
         return
 
     hostVisibleName = m.group(0)
     hostName = re.sub("[^0-9a-zA-Z\.-]+", '.', hostVisibleName)
 
-    if CONF['DEBUG']: safe_print(u"{}: Processing Host '{}'.".format(threadName, hostName))
+    if CONF['DEBUG']: print_debug(u"Processing Host '{}'.".format(hostName))
 
     # Check if Host is added to Zabbix and adds the Host if neccessary
-    hostData = checkHost(threadName, hostName, hostVisibleName)
+    hostData = checkHost(hostName, hostVisibleName)
     if hostData is None:
-        sys.stderr.write(u"{}: ERROR: Cannot add Host '{}' to Zabbix!\n".format(threadName, hostName))
+        print_error(u"Cannot add Host '{}' to Zabbix!\n".format(hostName))
         return
 
     # Check if Host is disabled (status == 1)
     if hostData['status'] == 1:
-        sys.stderr.write(u"{}: ERROR: Host '{}' is disabled.\n".format(threadName, hostName))
+        print_error(u"Host '{}' is disabled.\n".format(hostName))
         return
 
     hostApps = {}
@@ -588,13 +595,13 @@ def hostMon(threadName, serverData):
 
     if ENVMON:
         # Check if Host has envmon template in "parentTemplates"
-        if checkTemplate(threadName, hostData['hostid'], hostData['parentTemplates']) is None:
-            sys.stderr.write(u"{}: ERROR: Cannot add EnvMon Template to Host '{}'!\n".format(threadName, hostName))
+        if checkTemplate(hostData['hostid'], hostData['parentTemplates']) is None:
+            print_error(u"Cannot add EnvMon Template to Host '{}'!\n".format(hostName))
             return
     else:
         # Adding missing Server Items
-        if checkServerItems(threadName, hostData['hostid'], hostItems) is None:
-            sys.stderr.write(u"{}: ERROR: Cannot add some of the Items for Host '{}'!\n".format(threadName, hostName))
+        if checkServerItems(hostData['hostid'], hostItems) is None:
+            print_error(u"Cannot add some of the Items for Host '{}'!\n".format(hostName))
             return
 
     # Request body
@@ -618,7 +625,7 @@ def hostMon(threadName, serverData):
         response = requests.post(CONF['SERVER_URL'], data=body, headers=headers, timeout=CONF['TIMEOUT'], verify=False, cert=cert)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        sys.stderr.write(u"{}: ERROR: Cannot get response for '{}' ({}: {})!\n".format(threadName, hostVisibleName, type(e).__name__, e))
+        print_error(u"Cannot get response for '{}' ({}: {})!\n".format(hostVisibleName, type(e).__name__, e))
         return
 
     try:
@@ -629,8 +636,8 @@ def hostMon(threadName, serverData):
         if metrics is None:
             raise
     except Exception:
-        sys.stderr.write(u"{}: ERROR: Cannot parse response of '{}'!\n".format(threadName, hostVisibleName))
-        if CONF['DEBUG'] > 1: safe_print(u"{}: hostMon -> Response: {}".format(threadName, response.content))
+        print_error(u"Cannot parse response of '{}'!\n".format(hostVisibleName))
+        if CONF['DEBUG'] > 1: print_debug(u"hostMon -> Response: {}".format(response.content))
         return
 
     # Packet of Zabbix metrics
@@ -639,19 +646,19 @@ def hostMon(threadName, serverData):
     if ENVMON:
         # Host metrics
         for item in ENVMON_METRICS:
-            metric = getMetric(threadName, metrics.find(".//m:{}[m:name='{}']".format(item['type'], item['name']), NS), hostName)
+            metric = getMetric(metrics.find(".//m:{}[m:name='{}']".format(item['type'], item['name']), NS), hostName)
             if metric is not None:
                 packet += metric
             else:
-                sys.stderr.write(u"{}: ERROR: Metric '{}' for Host '{}' is not available!\n".format(threadName, item['name'], hostName))
+                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(item['name'], hostName))
     
         # It might not be a good idea to store full Package list in zabbix.
         # As a compromise we filter only xroad packages.
-        metric = getXRoadPackages(threadName, metrics.find(".//m:metricSet[m:name='Packages']", NS), hostName)
+        metric = getXRoadPackages(metrics.find(".//m:metricSet[m:name='Packages']", NS), hostName)
         if metric is not None:
             packet += metric
         else:
-            sys.stderr.write(u"{}: ERROR: MetricSet 'Packages' for Host '{}' is not available!\n".format(threadName, hostName))
+            print_error(u"MetricSet 'Packages' for Host '{}' is not available!\n".format(hostName))
     else:
         # Host metrics
         for item in SERVER_HEALTH_ITEMS:
@@ -660,21 +667,21 @@ def hostMon(threadName, serverData):
             try:
                 packet.append(ZabbixMetric(hostName, metricKey, metrics.find(metricPath, NS).text))
             except AttributeError:
-                sys.stderr.write(u"{}: ERROR: Metric '{}' for Host '{}' is not available!\n".format(threadName, metricKey, hostName))
+                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(metricKey, hostName))
     
         for serviceEvents in metrics.findall("om:servicesEvents/om:serviceEvents", NS):
             serviceName = getServiceName(serviceEvents.find("./om:service", NS))
             serviceKey = re.sub("[^0-9a-zA-Z\.-]+", '.', serviceName)
     
             # Check if Application is added
-            hostApps = checkApp(threadName, hostData['hostid'], hostApps, serviceName)
+            hostApps = checkApp(hostData['hostid'], hostApps, serviceName)
             if hostApps is None:
-                sys.stderr.write(u"{}: ERROR: Cannot add Application '{}' to Host '{}'!\n".format(threadName, serviceName, hostName))
+                print_error(u"Cannot add Application '{}' to Host '{}'!\n".format(serviceName, hostName))
                 return
     
             # Check if Service Items are added
-            if checkServiceItems(threadName, hostData['hostid'], hostItems, serviceName, serviceKey, hostApps[serviceName]) is None:
-                sys.stderr.write(u"{}: ERROR: Cannot add some of the service '{}' Items to Host '{}'!\n".format(threadName, serviceName, hostName))
+            if checkServiceItems(hostData['hostid'], hostItems, serviceName, serviceKey, hostApps[serviceName]) is None:
+                print_error(u"Cannot add some of the service '{}' Items to Host '{}'!\n".format(serviceName, hostName))
                 return
     
             # Service metrics
@@ -689,42 +696,21 @@ def hostMon(threadName, serverData):
     # Pushing metrics to zabbix
     sender = ZabbixSender(zabbix_server=urlparse.urlsplit(CONF['ZABBIX_URL']).hostname, zabbix_port=CONF['ZABBIX_SENDER_PORT'])
     try:
-        if CONF['DEBUG']: safe_print(u"{}: Saving Health metrics for Host '{}'.".format(threadName, hostName))
+        if CONF['DEBUG']: print_debug(u"Saving Health metrics for Host '{}'.".format(hostName))
         sender.send(packet)
     except Exception as e:
-        sys.stderr.write(u"{}: ERROR: Cannot save Health metrics for Host '{}'!\n{}\n".format(threadName, hostName, e))
+        print_error(u"Cannot save Health metrics for Host '{}'!\n{}\n".format(hostName, e))
 
-
-class myThread (threading.Thread):
-    """Class for handling threads."""
-    def __init__(self, threadID, name, q):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.name = name
-        self.q = q
-    def run(self):
-        if CONF['DEBUG']: safe_print(u"{}: Starting.".format(self.name))
-
-        global workingThreads
-        while not exitFlag:
-            # Locking workQueue
-            queueLock.acquire()
-            if not workQueue.empty():
-                data = self.q.get()
-                queueLock.release()
-                # Locking workingThreads - thread started working
-                with workingThreadsLock:
-                    workingThreads += 1
-                # Calling main processing function
-                hostMon(self.name, data)
-                # Locking workingThreads - thread finished working
-                with workingThreadsLock:
-                    workingThreads -= 1
-            else:
-                queueLock.release()
-            time.sleep(0.1)
-
-        if CONF['DEBUG']: safe_print(u"{}: Exiting.".format(self.name))
+def worker():
+    while True:
+        item = workQueue.get()
+        try:
+            # Calling main processing function
+            hostMon(item)
+        except Exception as e:
+            print_error(u"Unexpected error: {}: {}\n".format(type(e).__name__, e))
+        finally:
+            workQueue.task_done()
 
 
 # Main programm
@@ -741,40 +727,30 @@ if __name__ == '__main__':
         ENVMON = True
 
     if ENVMON:
-        if CONF['DEBUG']: safe_print(u"Collecting Envinronmental Monitoring.")
+        if CONF['DEBUG']: print_debug(u"Collecting Envinronmental Monitoring.")
     else:
-        if CONF['DEBUG']: safe_print(u"Collecting Health Monitoring.")
+        if CONF['DEBUG']: print_debug(u"Collecting Health Monitoring.")
 
     # Create ZabbixAPI class instance
     try: 
         zapi = ZabbixAPI(url = CONF['ZABBIX_URL'], user = CONF['ZABBIX_USER'], password = CONF['ZABBIX_PASS'])
     except Exception as e:
-        sys.stderr.write(u"ERROR: Cannot connect to Zabbix.\nURL: {}\nDetail: {}\n".format(CONF['ZABBIX_URL'], e))
+        print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}\n".format(CONF['ZABBIX_URL'], e))
         exit(1)
 
     # Check if EnvMon Template exists
     if ENVMON and not getTemplateName(CONF['ENVMON_TEMPLATE_ID']) == CONF['ENVMON_TEMPLATE_NAME']:
-        sys.stderr.write(u"ERROR: EnvMon Template (id='{}', name='{}') not found in Zabbix!\n".format(CONF['ENVMON_TEMPLATE_ID'], CONF['ENVMON_TEMPLATE_NAME']))
+        print_error(u"EnvMon Template (id='{}', name='{}') not found in Zabbix!\n".format(CONF['ENVMON_TEMPLATE_ID'], CONF['ENVMON_TEMPLATE_NAME']))
         exit(1)
-
-    # Used to signal threades to exit. 0 = continue; 1 = exit
-    exitFlag = 0
 
     # Working queue (list of servers to load the data from)
     workQueue = Queue.Queue()
+    for i in range(CONF['THREAD_COUNT']):
+        t = threading.Thread(target=worker)
+        t.daemon = True
+        t.start()
 
-    # Lock of workQueue
-    queueLock = threading.Lock()
-
-    # List of threads
-    threads = []
-
-    # Amount of threads that are working at this moment
-    workingThreads = 0
-
-    # Lock for workingThreads
-    workingThreadsLock = threading.Lock()
-
+    # Populate the queue
     if CONF['SERVERS']:
         # Using list of servers from configuration file
         for line in CONF['SERVERS'].splitlines():
@@ -784,22 +760,7 @@ if __name__ == '__main__':
         for line in sys.stdin:
             workQueue.put(line)
 
-    # Create and start new threads
-    for threadID in range(1, CONF['THREAD_COUNT'] + 1):
-        thread = myThread(threadID, "Thread-"+str(threadID), workQueue)
-        thread.setDaemon(True)
-        thread.start()
-        threads.append(thread)
+    # block until all tasks are done
+    workQueue.join()
 
-    # Wait for queue to empty and all threads to go idle
-    while not (workQueue.empty() and workingThreads == 0):
-        time.sleep(0.1)
-
-    # Notify threads it's time to exit
-    exitFlag = 1
-
-    # Wait for all threads to complete
-    for t in threads:
-        t.join()
-
-    if CONF['DEBUG']: safe_print(u"Main programm: Exiting.")
+    if CONF['DEBUG']: print_debug(u"Main programm: Exiting.")
