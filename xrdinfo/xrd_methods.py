@@ -46,7 +46,7 @@ if __name__ == '__main__':
         exit(0)
 
     for method in xrdinfo.methods(addr=args.url, client=client, service=service, method='listMethods', timeout=timeout, verify=verify, cert=cert):
-        line = u"{}/{}/{}/{}/{}/{}".format(method['xRoadInstance'], method['memberClass'], method['memberCode'], method['subsystemCode'], method['serviceCode'], method['serviceVersion'])
+        line = xrdinfo.stringify(method)
         if six.PY2:
             print(line.encode('utf-8'))
         else:

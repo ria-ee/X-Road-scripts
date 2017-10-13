@@ -49,4 +49,7 @@ if __name__ == '__main__':
 
     wsdl = xrdinfo.wsdl(addr=args.url, client=client, service=service, timeout=timeout, verify=verify, cert=cert)
     if wsdl:
-        print(wsdl)
+        if six.PY2:
+            print(wsdl.encode('utf-8'))
+        else:
+            print(wsdl)
