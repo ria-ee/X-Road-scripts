@@ -257,19 +257,22 @@ ENVMON_REQUEST_MEMBER_TEMPLATE = u"""<SOAP-ENV:Envelope
 """
 
 
-printLock = threading.Lock()
 def print_debug(content):
-    """Thread safe and unicode safe print function."""
-    content = u"{}: {}".format(threading.currentThread().getName(), content)
-    with printLock:
-        if six.PY2:
-            print(content.encode('utf-8'))
-        else:
-            print(content)
+    """Thread safe and unicode safe debug printer."""
+    content = u"{}: {}\n".format(threading.currentThread().getName(), content)
+    if six.PY2:
+        # Using thread safe "write" instead of "print"
+        sys.stdout.write(content.encode('utf-8'))
+    else:
+        sys.stdout.write(content)
 
 def print_error(content):
-    """Thread safe and unicode safe print function."""
-    sys.stderr.write(u"{}: ERROR: '{}'\n".format(threading.currentThread().getName(), content))
+    """Thread safe and unicode safe error printer."""
+    content = u"{}: ERROR: '{}'\n".format(threading.currentThread().getName(), content)
+    if six.PY2:
+        sys.stderr.write(content.encode('utf-8'))
+    else:
+        sys.stderr.write(content)
 
 def loadConf(confArg):
     """ Load configuration from file."""
@@ -288,7 +291,7 @@ def loadConf(confArg):
     if CONF_SECTION not in config.sections():
         if confArg is None:
             # Default configuration file may be missing if program configuration is up to date
-            if CONF['DEBUG']: print_debug(u"Configuration not found, using default values.")
+            if CONF['DEBUG']: print_debug(u'Configuration not found, using default values.')
             return
         else:
             # User provided configuration is incorrect
@@ -349,7 +352,7 @@ def checkTemplate(hostId, parentTemplates):
                 hostid = hostId,
                 templates = [
                     {
-                        "templateid": CONF['ENVMON_TEMPLATE_ID']
+                        'templateid': CONF['ENVMON_TEMPLATE_ID']
                     }
                 ],
             )
@@ -386,22 +389,22 @@ def addHost(hostName, hostVisibleName):
             description = hostVisibleName,
             interfaces = [
                 {
-                    "type": 1,
-                    "main": 1,
-                    "useip": 1,
-                    "ip": "127.0.0.1",
-                    "dns": "",
-                    "port": "10050"
+                    'type': 1,
+                    'main': 1,
+                    'useip': 1,
+                    'ip': '127.0.0.1',
+                    'dns': '',
+                    'port': '10050'
                 }
             ],
             groups = [
                 {
-                    "groupid": CONF['ZABBIX_GROUP_ID']
+                    'groupid': CONF['ZABBIX_GROUP_ID']
                 }
             ],
             templates = [
                 {
-                    "templateid": CONF['ENVMON_TEMPLATE_ID']
+                    'templateid': CONF['ENVMON_TEMPLATE_ID']
                 }
             ] if ENVMON else []
         )
@@ -490,17 +493,17 @@ def checkServiceItems(hostId, hostItems, serviceName, serviceKey, appId):
 
 def getServiceName(service):
     """Get service name from XML element."""
-    elem = service.find("./id:xRoadInstance", NS)
+    elem = service.find('./id:xRoadInstance', NS)
     xRoadInstance = elem.text if elem is not None else ''
-    elem = service.find("./id:memberClass", NS)
+    elem = service.find('./id:memberClass', NS)
     memberClass = elem.text if elem is not None else ''
-    elem = service.find("./id:memberCode", NS)
+    elem = service.find('./id:memberCode', NS)
     memberCode = elem.text if elem is not None else ''
-    elem = service.find("./id:subsystemCode", NS)
+    elem = service.find('./id:subsystemCode', NS)
     subsystemCode = elem.text if elem is not None else ''
-    elem = service.find("./id:serviceCode", NS)
+    elem = service.find('./id:serviceCode', NS)
     serviceCode = elem.text if elem is not None else ''
-    elem = service.find("./id:serviceVersion", NS)
+    elem = service.find('./id:serviceVersion', NS)
     serviceVersion = elem.text if elem is not None else ''
     return u"{}/{}/{}/{}/{}/{}".format(xRoadInstance, memberClass, memberCode, subsystemCode, serviceCode, serviceVersion)
 
@@ -509,27 +512,27 @@ def getMetric(node, server):
        Return Zabbix packet elements.
     """
     p = []
-    nsp = "{" + NS['m'] + "}"
+    nsp = '{' + NS['m'] + '}'
 
-    if node.tag == nsp+"stringMetric" or node.tag == nsp+"numericMetric":
+    if node.tag == nsp+'stringMetric' or node.tag == nsp+'numericMetric':
         try:
-            name = node.find("./m:name", NS).text
+            name = node.find('./m:name', NS).text
             # Some names may have '/' character which is forbiden by zabbix
-            name=name.replace("/", "")
-            p.append(ZabbixMetric(server, name, node.find("./m:value", NS).text))
+            name=name.replace('/', '')
+            p.append(ZabbixMetric(server, name, node.find('./m:value', NS).text))
             return p
         except AttributeError:
             if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
             return None
-    elif node.tag == nsp+"histogramMetric":
+    elif node.tag == nsp+'histogramMetric':
         try:
-            name = node.find("./m:name", NS).text
-            p.append(ZabbixMetric(server, name+"_updated", node.find("./m:updated", NS).text))
-            p.append(ZabbixMetric(server, name+"_min", node.find("./m:min", NS).text))
-            p.append(ZabbixMetric(server, name+"_max", node.find("./m:max", NS).text))
-            p.append(ZabbixMetric(server, name+"_mean", node.find("./m:mean", NS).text))
-            p.append(ZabbixMetric(server, name+"_median", node.find("./m:median", NS).text))
-            p.append(ZabbixMetric(server, name+"_stddev", node.find("./m:stddev", NS).text))
+            name = node.find('./m:name', NS).text
+            p.append(ZabbixMetric(server, name+'_updated', node.find('./m:updated', NS).text))
+            p.append(ZabbixMetric(server, name+'_min', node.find('./m:min', NS).text))
+            p.append(ZabbixMetric(server, name+'_max', node.find('./m:max', NS).text))
+            p.append(ZabbixMetric(server, name+'_mean', node.find('./m:mean', NS).text))
+            p.append(ZabbixMetric(server, name+'_median', node.find('./m:median', NS).text))
+            p.append(ZabbixMetric(server, name+'_stddev', node.find('./m:stddev', NS).text))
             return p
         except AttributeError:
             if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
@@ -544,12 +547,12 @@ def getXRoadPackages(node, server):
     p=[]
 
     try:
-        name = node.find("./m:name", NS).text
+        name = node.find('./m:name', NS).text
         data = ''
-        for pack in node.findall("./m:stringMetric", NS):
-            packname = pack.find("./m:name", NS).text
-            if "xroad" in packname or "xtee" in packname:
-                data += packname + ": " + pack.find("./m:value", NS).text + "\n"
+        for pack in node.findall('./m:stringMetric', NS):
+            packname = pack.find('./m:name', NS).text
+            if 'xroad' in packname or 'xtee' in packname:
+                data += u"{}: {}\n".format(packname, pack.find('./m:value', NS).text)
         p.append(ZabbixMetric(server, name, data))
         return p
     except AttributeError:
@@ -563,14 +566,14 @@ def hostMon(serverData):
     # XTEE-CI-XM/GOV/00000001/00000001_1/xtee9.ci.kit
     # XTEE-CI-XM/COM/00000002/00000002_1/xtee10.ci.kit
     # Server name part is "greedy" match to allow server names to have "/" character
-    m = re.match("^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$", serverData)
+    m = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', serverData)
 
     if m is None or m.lastindex != 5:
         print_error(u"Incorrect server string '{}'!\n".format(serverData))
         return
 
     hostVisibleName = m.group(0)
-    hostName = re.sub("[^0-9a-zA-Z\.-]+", '.', hostVisibleName)
+    hostName = re.sub('[^0-9a-zA-Z\.-]+', '.', hostVisibleName)
 
     if CONF['DEBUG']: print_debug(u"Processing Host '{}'.".format(hostName))
 
@@ -619,7 +622,7 @@ def hostMon(serverData):
     if CONF['TLS_CERT'] and CONF['TLS_KEY']:
         cert = (CONF['TLS_CERT'], CONF['TLS_KEY'])
 
-    headers = {"Content-type": "text/xml;charset=UTF-8"}
+    headers = {'Content-type': 'text/xml;charset=UTF-8'}
 
     try:
         response = requests.post(CONF['SERVER_URL'], data=body, headers=headers, timeout=CONF['TIMEOUT'], verify=False, cert=cert)
@@ -630,9 +633,9 @@ def hostMon(serverData):
 
     try:
         # Skipping multipart headers
-        envel = re.search("<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>", response.text, re.DOTALL)
+        envel = re.search('<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>', response.text, re.DOTALL)
         root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
-        metrics = root.find(".//m:getSecurityServerMetricsResponse/m:metricSet" if ENVMON else ".//om:getSecurityServerHealthDataResponse", NS)
+        metrics = root.find('.//m:getSecurityServerMetricsResponse/m:metricSet' if ENVMON else './/om:getSecurityServerHealthDataResponse', NS)
         if metrics is None:
             raise
     except Exception:
@@ -662,16 +665,16 @@ def hostMon(serverData):
     else:
         # Host metrics
         for item in SERVER_HEALTH_ITEMS:
-            metricPath = "./om:{}".format(item['key'])
+            metricPath = './om:{}'.format(item['key'])
             metricKey = item['key']
             try:
                 packet.append(ZabbixMetric(hostName, metricKey, metrics.find(metricPath, NS).text))
             except AttributeError:
                 print_error(u"Metric '{}' for Host '{}' is not available!\n".format(metricKey, hostName))
     
-        for serviceEvents in metrics.findall("om:servicesEvents/om:serviceEvents", NS):
-            serviceName = getServiceName(serviceEvents.find("./om:service", NS))
-            serviceKey = re.sub("[^0-9a-zA-Z\.-]+", '.', serviceName)
+        for serviceEvents in metrics.findall('om:servicesEvents/om:serviceEvents', NS):
+            serviceName = getServiceName(serviceEvents.find('./om:service', NS))
+            serviceKey = re.sub('[^0-9a-zA-Z\.-]+', '.', serviceName)
     
             # Check if Application is added
             hostApps = checkApp(hostData['hostid'], hostApps, serviceName)
@@ -727,9 +730,9 @@ if __name__ == '__main__':
         ENVMON = True
 
     if ENVMON:
-        if CONF['DEBUG']: print_debug(u"Collecting Envinronmental Monitoring.")
+        if CONF['DEBUG']: print_debug(u'Collecting Envinronmental Monitoring.')
     else:
-        if CONF['DEBUG']: print_debug(u"Collecting Health Monitoring.")
+        if CONF['DEBUG']: print_debug(u'Collecting Health Monitoring.')
 
     # Create ZabbixAPI class instance
     try: 
@@ -763,4 +766,4 @@ if __name__ == '__main__':
     # block until all tasks are done
     workQueue.join()
 
-    if CONF['DEBUG']: print_debug(u"Main programm: Exiting.")
+    if CONF['DEBUG']: print_debug(u'Main programm: Exiting.')
