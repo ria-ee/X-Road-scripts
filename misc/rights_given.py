@@ -33,18 +33,17 @@ cur.execute("""select ar.servicecode, ar.rightsgiven,
     join client c on c.id=ar.client_id
     join identifier ci on ci.id=c.identifier
     join identifier si on si.id=ar.subjectid;""")
-print('service,rightgiventime,producer,consumer')
+print('service,rightgiventime,producer,consumer,globalgroup,localgroup')
 for rec in cur:
     if rec[10] == 'SUBSYSTEM':
-        line = '{},{},{},{}'.format(rec[0], rec[1], '/'.join(rec[2:6]), '/'.join(rec[6:10]))
+        line = '{},{},{},{},,'.format(rec[0], rec[1], '/'.join(rec[2:6]), '/'.join(rec[6:10]))
         print(line)
     elif rec[10] == 'GLOBALGROUP':
-        line = '{},{},{},{}'.format(rec[0], rec[1], '/'.join(rec[2:6]), 'GLOBALGROUP:{}/{}'.format(rec[6],rec[11]))
+        line = '{},{},{},,{},'.format(rec[0], rec[1], '/'.join(rec[2:6]), '{}/{}'.format(rec[6],rec[11]))
         print(line)
     elif rec[10] == 'LOCALGROUP':
-        line = '{},{},{},{}'.format(rec[0], rec[1], '/'.join(rec[2:6]), 'LOCALGROUP:'+rec[11])
+        line = '{},{},{},,,{}'.format(rec[0], rec[1], '/'.join(rec[2:6]), rec[11])
         print(line)
-
 
 cur.close()
 conn.close()
