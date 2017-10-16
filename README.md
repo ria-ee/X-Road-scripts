@@ -85,3 +85,28 @@ Use the provided examples to create your configuration file:
 Environment monitoring is using Zabbix template
 [envmon_template.xml](zabbix/envmon_template.xml) that should be imported
 into Zabbix prior to execution of the collector.
+
+## Miscellaneous
+[right_given.py](misc/right_given.py) - Can be executed inside Security Server
+to display the list of Access Rights granted. This script is using psycopg2
+python module that can be installed with the following command:
+
+(Python2)
+```
+sudo apt-get install python-psycopg2
+```
+(Python3)
+```
+sudo apt-get install python3-psycopg2
+```
+
+The result is in CSV format and is outputed to STDOUT.
+
+Usage (Python2):
+```
+sudo su xroad -c "python rights.py" > rights.csv
+```
+Usage (Python3):
+```
+sudo su xroad -c "python3 rights.py" > rights.csv
+```
