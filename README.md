@@ -87,7 +87,7 @@ Environment monitoring is using Zabbix template
 into Zabbix prior to execution of the collector.
 
 ## Miscellaneous
-[right_given.py](misc/right_given.py) - Can be executed inside Security Server
+[rights_given.py](misc/rights_given.py) - Can be executed inside Security Server
 to display the list of Access Rights granted. This script is using psycopg2
 python module that can be installed with the following command:
 
