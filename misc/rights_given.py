@@ -32,9 +32,9 @@ cur.execute("""select ar.servicecode, ar.rightsgiven,
     join client c on c.id=ar.client_id
     join identifier ci on ci.id=c.identifier
     join identifier si on si.id=ar.subjectid;""")
-print('service, rightgiventime, producer, consumer')
+print('service,rightgiventime,producer,consumer')
 for rec in cur:
-    line = '{}, {}, {}, {}'.format(rec[0], rec[1], '/'.join(rec[2:6]), '/'.join(rec[6:10]))
+    line = '{},{},{},{}'.format(rec[0], rec[1], '/'.join(rec[2:6]), '/'.join(rec[6:10]))
     print(line)
 
 cur.close()
