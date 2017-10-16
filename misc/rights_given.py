@@ -28,7 +28,7 @@ cur = conn.cursor()
 cur.execute("""select ar.servicecode, ar.rightsgiven,
     ci.xroadinstance p_xroadinstance, ci.memberclass p_memberclass, ci.membercode p_membercode, ci.subsystemcode p_subsystemcode,
     si.xroadinstance c_xroadinstance, si.memberclass c_memberclass, si.membercode c_membercode, si.subsystemcode c_subsystemcode,
-    si.type, si.groupcode
+    si.type c_type, si.groupcode c_groupcode
     from accessright ar
     join client c on c.id=ar.client_id
     join identifier ci on ci.id=c.identifier
