@@ -6,19 +6,19 @@ import re
 with open('/etc/xroad/db.properties', 'r') as dbConf:
     for line in dbConf:
         # Example: serverconf.hibernate.connection.url = jdbc:postgresql://127.0.0.1:5432/serverconf
-        m = re.match('^serverconf.hibernate.connection.url\s+=\s+jdbc:postgresql://(.+):(.+)/(.+)$', line)
+        m = re.match('^serverconf.hibernate.connection.url\s*=\s*jdbc:postgresql://(.+):(.+)/(.+)$', line)
         if m:
             host = m.group(1)
             port = m.group(2)
             dbname = m.group(3)
 
         # Example: serverconf.hibernate.connection.username = serverconf
-        m = re.match('^serverconf.hibernate.connection.username\s+=\s+(.+)$', line)
+        m = re.match('^serverconf.hibernate.connection.username\s*=\s*(.+)$', line)
         if m:
             user = m.group(1)
 
         # Example: serverconf.hibernate.connection.password = serverconf
-        m = re.match('^serverconf.hibernate.connection.password\s+=\s+(.+)$', line)
+        m = re.match('^serverconf.hibernate.connection.password\s*=\s*(.+)$', line)
         if m:
             password = m.group(1)
 
