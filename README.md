@@ -30,15 +30,13 @@ any Python2.7+ or Python3 application. It implements:
 * getWsdl X-Road request.
 
 There ara also some example scripts that use xrdinfo module:
-* [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of all
-  methods (services) in X-Road instance.
-* [xrd_all_methods_allowed.py](xrdinfo/xrd_all_methods_allowed.py) - Returns
-  the list of all allowed methods in X-Road instance. Or in other words
-  services with access rights granted to the issuer of the X-Road request.
+* [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
+  all or allowed (services with access rights granted to the issuer of the
+  X-Road request) methods (services) in X-Road instance.
+* [xrd_all_wsdls.py](xrdinfo/xrd_all_wsdls.py) - Downloads all WSDL documents
+  of specified X-Road instance and creates an index for these WSDL's.
 * [xrd_methods.py](xrdinfo/xrd_methods.py) - Returns the list of methods
-  provided by a specified X-Road Member.
-* [xrd_methods_allowed.py](xrdinfo/xrd_methods_allowed.py) - Returns the list
-  of allowed methods provided by a specified X-Road Member.
+  provided or allowed by a specified X-Road Member.
 * [xrd_registered_subsystems.py](xrdinfo/xrd_registered_subsystems.py) -
   Returns the list of all Subsystems in X-Road instance that are registered
   in at least one Security Server.
@@ -58,12 +56,6 @@ There ara also some example scripts that use xrdinfo module:
 * [xrd_wsdl.py](xrdinfo/xrd_wsdl.py) - Returns the service WSDL using X-Road
   request. This script can be useful when http://SECURITYSERVER/wsdl service is
   disabled or TLS authentication is required to access Security Server.
-
-Warning are disabled by default. Set environmental variable `XRDINFO_DEBUG=True`
-or use the following command after importing xrdinfo to enable warnings:
-```python
-xrdinfo.DEBUG=True
-```
 
 ## Health and Environment monitoring
 [metrics.py](zabbix/metrics.py) - X-Road Health and Environment monitoring
