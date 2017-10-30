@@ -3,9 +3,12 @@
 import argparse
 import xrdinfo
 import six
+import sys
+
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT=5.0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -40,22 +43,33 @@ if __name__ == '__main__':
     if args.cert and args.key:
         cert = (args.cert, args.key)
 
-    sharedParams = b''
     if args.s:
-        sharedParams = xrdinfo.sharedParamsSS(addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
+        try:
+            sharedParams = xrdinfo.sharedParamsSS(addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
+        except (xrdinfo.XrdInfoError) as e:
+            print_error(e)
+            exit(1)
     elif args.c:
-        sharedParams = xrdinfo.sharedParamsCS(addr=args.c, timeout=timeout, verify=verify, cert=cert)
+        try:
+            sharedParams = xrdinfo.sharedParamsCS(addr=args.c, timeout=timeout, verify=verify, cert=cert)
+        except (xrdinfo.XrdInfoError) as e:
+            print_error(e)
+            exit(1)
     else:
         parser.print_help()
-        exit(0)
+        exit(1)
 
-    for subsystem in xrdinfo.subsystemsWithServer(sharedParams):
-        line = xrdinfo.stringify(subsystem)
-        if six.PY2 and len(subsystem)==4:
-            print((u"{} NOSERVER".format(line)).encode('utf-8'))
-        elif six.PY2:
-            print(line.encode('utf-8'))
-        elif len(subsystem)==4:
-            print(u"{} NOSERVER".format(line))
-        else:
-            print(line)
+    try:
+        for subsystem in xrdinfo.subsystemsWithServer(sharedParams):
+            line = xrdinfo.stringify(subsystem)
+            if six.PY2 and len(subsystem)==4:
+                print((u"{} NOSERVER".format(line)).encode('utf-8'))
+            elif six.PY2:
+                print(line.encode('utf-8'))
+            elif len(subsystem)==4:
+                print(u"{} NOSERVER".format(line))
+            else:
+                print(line)
+    except (xrdinfo.XrdInfoError) as e:
+        print_error(e)
+        exit(1)

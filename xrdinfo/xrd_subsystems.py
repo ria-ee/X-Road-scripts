@@ -3,16 +3,27 @@
 import argparse
 import xrdinfo
 import six
+import sys
+
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT=5.0
+
+
+def print_error(content):
+    """Thread safe and unicode safe error printer."""
+    content = u"ERROR: {}\n".format(content)
+    if six.PY2:
+        sys.stderr.write(content.encode('utf-8'))
+    else:
+        sys.stderr.write(content)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='List X-Road Subsystems.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='You need to provide either Security Server or Central Server address. '
-            'By default peer TLS sertificate is not validated.\n\n'
+        epilog='You need to provide either Security Server or Central Server address.\n\n'
             'NB! Global configuration signature is not validated when using Central Server.\n'
             'Use local Security Server whenever possible.'
     )
@@ -41,18 +52,29 @@ if __name__ == '__main__':
     if args.cert and args.key:
         cert = (args.cert, args.key)
 
-    sharedParams = b''
-    if args.s is not None:
-        sharedParams = xrdinfo.sharedParamsSS(addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
-    elif args.c is not None:
-        sharedParams = xrdinfo.sharedParamsCS(addr=args.c, timeout=timeout, verify=verify, cert=cert)
+    if args.s:
+        try:
+            sharedParams = xrdinfo.sharedParamsSS(addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
+        except (xrdinfo.XrdInfoError) as e:
+            print_error(e)
+            exit(1)
+    elif args.c:
+        try:
+            sharedParams = xrdinfo.sharedParamsCS(addr=args.c, timeout=timeout, verify=verify, cert=cert)
+        except (xrdinfo.XrdInfoError) as e:
+            print_error(e)
+            exit(1)
     else:
         parser.print_help()
-        exit(0)
+        exit(1)
 
-    for subsystem in xrdinfo.subsystems(sharedParams):
-        line = xrdinfo.stringify(subsystem)
-        if six.PY2:
-            print(line.encode('utf-8'))
-        else:
-            print(line)
+    try:
+        for subsystem in xrdinfo.subsystems(sharedParams):
+            line = xrdinfo.stringify(subsystem)
+            if six.PY2:
+                print(line.encode('utf-8'))
+            else:
+                print(line)
+    except (xrdinfo.XrdInfoError) as e:
+        print_error(e)
+        exit(1)
