@@ -28,7 +28,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     instance = None
-    if args.instance:
+    if args.instance and six.PY2:
+        # Convert to unicode
+        instance = args.instance.decode('utf-8')
+    elif args.instance:
         instance = args.instance
 
     timeout = DEFAULT_TIMEOUT
@@ -62,12 +65,11 @@ if __name__ == '__main__':
     try:
         for subsystem in xrdinfo.subsystemsWithServer(sharedParams):
             line = xrdinfo.stringify(subsystem)
-            if six.PY2 and len(subsystem)==4:
-                print((u"{} NOSERVER".format(line)).encode('utf-8'))
-            elif six.PY2:
+            if len(subsystem)==4:
+                # No server found
+                line = u"{} NOSERVER".format(line)
+            if six.PY2:
                 print(line.encode('utf-8'))
-            elif len(subsystem)==4:
-                print(u"{} NOSERVER".format(line))
             else:
                 print(line)
     except (xrdinfo.XrdInfoError) as e:

@@ -28,7 +28,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     instance = None
-    if args.instance:
+    if args.instance and six.PY2:
+        # Convert to unicode
+        instance = args.instance.decode('utf-8')
+    elif args.instance:
         instance = args.instance
 
     timeout = DEFAULT_TIMEOUT

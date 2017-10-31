@@ -37,7 +37,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     instance = None
-    if args.instance:
+    if args.instance and six.PY2:
+        # Convert to unicode
+        instance = args.instance.decode('utf-8')
+    elif args.instance:
         instance = args.instance
 
     timeout = DEFAULT_TIMEOUT
@@ -70,6 +73,7 @@ if __name__ == '__main__':
 
     try:
         for ip in xrdinfo.serversIPs(sharedParams):
+            # Should never contain non ASCII characters
             print(ip)
     except (xrdinfo.XrdInfoError) as e:
         print_error(e)

@@ -2,13 +2,12 @@
 
 """X-Road informational module."""
 
-from six import BytesIO, PY2
+from six import BytesIO
 import re
 import requests
 import socket
 import six.moves.urllib.parse as urlparse
 import sys
-import os
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
@@ -72,7 +71,7 @@ REQUEST_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
 </SOAP-ENV:Envelope>
 """
 
-METHODS_BODY_TEMPL = u"        <xroad:{method}/>"
+METHODS_BODY_TEMPL = u'        <xroad:{method}/>'
 
 GETWSDL_SERVICE = u'getWsdl'
 
@@ -97,7 +96,7 @@ class XrdInfoError(Exception):
             super(XrdInfoError, self).__init__(exc)
         elif isinstance(exc, Exception):
             # Wrapped exception
-            super(XrdInfoError, self).__init__(u"{}: {}".format(type(exc).__name__, exc))
+            super(XrdInfoError, self).__init__(u'{}: {}'.format(type(exc).__name__, exc))
         else:
             # Error message
             super(XrdInfoError, self).__init__(exc)
@@ -106,7 +105,7 @@ class XrdInfoError(Exception):
 class SoapFaultError(XrdInfoError):
     """SOAP Fault received."""
     def __init__(self, msg):
-        super(SoapFaultError, self).__init__(u"SoapFault: {}".format(msg))
+        super(SoapFaultError, self).__init__(u'SoapFault: {}'.format(msg))
 
 
 class TimeoutError(XrdInfoError):
@@ -115,7 +114,7 @@ class TimeoutError(XrdInfoError):
 
 
 def sharedParamsSS(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
-    """Get shared-params.xml content from local Security Server and return encoded as bytes.
+    """Get shared-params.xml content from local Security Server.
        By default return info about local X-Road instance.
     """
     try:
@@ -125,7 +124,7 @@ def sharedParamsSS(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, c
             url = 'https://'+url
         elif not urlparse.urlsplit(url).scheme:
             url = 'http://'+url
-        # Add "/verificationconf" if path is missing
+        # Add '/verificationconf' if path is missing
         if urlparse.urlsplit(url).path == '':
             url = url + '/verificationconf'
         elif urlparse.urlsplit(url).path == '/':
@@ -141,9 +140,9 @@ def sharedParamsSS(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, c
             identFile = verConfZip.open('verificationconf/instance-identifier')
             ident = identFile.read()
             ident = ident.decode('utf-8')
-        sharedParamsFile = verConfZip.open('verificationconf/{}/shared-params.xml'.format(ident))
+        sharedParamsFile = verConfZip.open(u'verificationconf/{}/shared-params.xml'.format(ident))
         sharedParams = sharedParamsFile.read()
-        return sharedParams
+        return sharedParams.decode('utf-8')
     except requests.exceptions.Timeout as e:
         raise TimeoutError(e)
     except Exception as e:
@@ -151,7 +150,7 @@ def sharedParamsSS(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, c
 
 
 def sharedParamsCS(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
-    """Get shared-params.xml content from Central Server/Configuration Proxy and return encoded as bytes.
+    """Get shared-params.xml content from Central Server/Configuration Proxy.
        Global configuration is not validated, use sharedParamsSS whenever possible.
     """
     try:
@@ -161,20 +160,20 @@ def sharedParamsCS(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
             url = 'https://'+url
         elif not urlparse.urlsplit(url).scheme:
             url = 'http://'+url
-        # Add "/internalconf" if path is missing
+        # Add '/internalconf' if path is missing
         if urlparse.urlsplit(url).path == '':
             url = url + '/internalconf'
         elif urlparse.urlsplit(url).path == '/':
             url = url + 'internalconf'
         globalConf = requests.get(url, timeout=timeout, verify=verify, cert=cert)
         globalConf.raise_for_status()
-        # Configuration Proxy uses lowercase for "Content-location"
+        # Configuration Proxy uses lowercase for 'Content-location'
         s = re.search('Content-location: (/.+/shared-params.xml)', globalConf.text, re.IGNORECASE)
         url2 = urlparse.urljoin(url, s.group(1))
         sharedParamsResponse = requests.get(url2, timeout=timeout, verify=verify, cert=cert)
         sharedParamsResponse.raise_for_status()
-        sharedParams = sharedParamsResponse.content
-        return sharedParams
+        sharedParamsResponse.encoding = 'utf-8'
+        return sharedParamsResponse.text
     except requests.exceptions.Timeout as e:
         raise TimeoutError(e)
     except Exception as e:
@@ -186,13 +185,13 @@ def subsystems(sharedParams):
        Return tuple: (xRoadInstance, memberClass, memberCode, subsystemCode).
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
-        instance = root.find('./instanceIdentifier').text
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+        instance = u'' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            memberClass = member.find('./memberClass/code').text
-            memberCode = member.find('./memberCode').text
+            memberClass = u'' + member.find('./memberClass/code').text
+            memberCode = u'' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
-                subsystemCode = subsystem.find('./subsystemCode').text
+                subsystemCode = u'' + subsystem.find('./subsystemCode').text
                 yield (instance, memberClass, memberCode, subsystemCode)
     except Exception as e:
         raise XrdInfoError(e)
@@ -203,15 +202,14 @@ def subsystemsWithMembername(sharedParams):
        Return tuple: (xRoadInstance, memberClass, memberCode, subsystemCode, Member Name).
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
-        instance = root.find('./instanceIdentifier').text
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+        instance = u'' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            memberId = member.attrib['id']
-            memberClass = member.find('./memberClass/code').text
-            memberCode = member.find('./memberCode').text
-            memberName = member.find('./name').text
+            memberClass = u'' + member.find('./memberClass/code').text
+            memberCode = u'' + member.find('./memberCode').text
+            memberName = u'' + member.find('./name').text
             for subsystem in member.findall('./subsystem'):
-                subsystemCode = subsystem.find('./subsystemCode').text
+                subsystemCode = u'' + subsystem.find('./subsystemCode').text
                 yield (instance, memberClass, memberCode, subsystemCode, memberName)
     except Exception as e:
         raise XrdInfoError(e)
@@ -222,16 +220,15 @@ def registeredSubsystems(sharedParams):
        Return tuple: (xRoadInstance, memberClass, memberCode, subsystemCode).
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
-        instance = root.find('./instanceIdentifier').text
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+        instance = u'' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            memberId = member.attrib['id']
-            memberClass = member.find('./memberClass/code').text
-            memberCode = member.find('./memberCode').text
+            memberClass = u'' + member.find('./memberClass/code').text
+            memberCode = u'' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
                 subsystemId = subsystem.attrib['id']
-                subsystemCode = subsystem.find('./subsystemCode').text
-                if root.findall("./securityServer[client='{}']".format(subsystemId)):
+                subsystemCode = u'' + subsystem.find('./subsystemCode').text
+                if root.findall('./securityServer[client="{}"]'.format(subsystemId)):
                     yield (instance, memberClass, memberCode, subsystemCode)
     except Exception as e:
         raise XrdInfoError(e)
@@ -246,23 +243,22 @@ def subsystemsWithServer(sharedParams):
        (xRoadInstance, memberClass, memberCode, subsystemCode).
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
-        instance = root.find('./instanceIdentifier').text
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+        instance = u'' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            memberId = member.attrib['id']
-            memberClass = member.find('./memberClass/code').text
-            memberCode = member.find('./memberCode').text
+            memberClass = u'' + member.find('./memberClass/code').text
+            memberCode = u'' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
                 subsystemId = subsystem.attrib['id']
-                subsystemCode = subsystem.find('./subsystemCode').text
+                subsystemCode = u'' + subsystem.find('./subsystemCode').text
                 serverFound = False
-                for server in root.findall("./securityServer[client='{}']".format(subsystemId)):
+                for server in root.findall('./securityServer[client="{}"]'.format(subsystemId)):
                     ownerId = server.find('./owner').text
-                    owner = root.find("./member[@id='{}']".format(ownerId))
-                    ownerClass = owner.find('./memberClass/code').text
-                    ownerCode = owner.find('./memberCode').text
-                    serverCode = server.find('./serverCode').text
-                    address = server.find('./address').text
+                    owner = root.find('./member[@id="{}"]'.format(ownerId))
+                    ownerClass = u'' + owner.find('./memberClass/code').text
+                    ownerCode = u'' + owner.find('./memberCode').text
+                    serverCode = u'' + server.find('./serverCode').text
+                    address = u'' + server.find('./address').text
                     yield (instance, memberClass, memberCode, subsystemCode, instance, ownerClass, ownerCode, serverCode, address)
                     serverFound = True
                 if not serverFound:
@@ -276,15 +272,15 @@ def servers(sharedParams):
        Return tuple: (Server Owners xRoadInstance, Server Owners memberClass, Server Owners memberCode, serverCode, Server Address).
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
-        instance = root.find('./instanceIdentifier').text
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
+        instance = u'' + root.find('./instanceIdentifier').text
         for server in root.findall('./securityServer'):
             ownerId = server.find('./owner').text
-            owner = root.find("./member[@id='{}']".format(ownerId))
-            memberClass = owner.find('./memberClass/code').text
-            memberCode = owner.find('./memberCode').text
-            serverCode = server.find('./serverCode').text
-            address = server.find('./address').text
+            owner = root.find('./member[@id="{}"]'.format(ownerId))
+            memberClass = u'' + owner.find('./memberClass/code').text
+            memberCode = u'' + owner.find('./memberCode').text
+            serverCode = u'' + server.find('./serverCode').text
+            address = u'' + server.find('./address').text
             yield (instance, memberClass, memberCode, serverCode, address)
     except Exception as e:
         raise XrdInfoError(e)
@@ -295,12 +291,12 @@ def serversIPs(sharedParams):
        Unresolved DNS names are silently ignored.
     """
     try:
-        root = ET.fromstring(sharedParams)    # ET.fromstring wants encoded bytes as input (PY2)
+        root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
         for server in root.findall('./securityServer'):
             address = server.find('address').text
             try:
                 for ip in socket.gethostbyname_ex(address)[2]:
-                    yield (ip)
+                    yield (u'' + ip)
             except (socket.gaierror):
                 # Ignoring DNS name not found error
                 pass
@@ -331,12 +327,15 @@ def methods(addr, client, service, method='listMethods', timeout=DEFAULT_TIMEOUT
     try:
         methodsResponse = requests.post(url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify, cert=cert)
         methodsResponse.raise_for_status()
+        methodsResponse.encoding = 'utf-8'
+
         # Some servers might return multipart message.
         envel = re.search('<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>', methodsResponse.text, re.DOTALL) 
         root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
         if root.find('.//faultstring') is not None:
-            raise SoapFaultError(root.find(".//faultstring").text)
-        for service in root.findall(".//xrd:{}Response/xrd:service".format(method), NS):
+            raise SoapFaultError(root.find('.//faultstring').text)
+
+        for service in root.findall('.//xrd:{}Response/xrd:service'.format(method), NS):
             method = {}
             # Elements subsystemCode and serviceVersion may be missing.
             method['xRoadInstance'] = service.find('./id:xRoadInstance', NS).text
@@ -380,6 +379,7 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
     try:
         wsdlResponse = requests.post(url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify, cert=cert)
         wsdlResponse.raise_for_status()
+        wsdlResponse.encoding = 'utf-8'
 
         resp = re.search('--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>.+--xroad.+content-type:text/xml\r\n\r\n(.+)\r\n--xroad.+', wsdlResponse.text, re.DOTALL)
         if resp:
@@ -388,14 +388,14 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
                 # SOAP Fault found instead of WSDL
                 root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
                 if root.find('.//faultstring') is not None:
-                    raise SoapFaultError(root.find(".//faultstring").text)
+                    raise SoapFaultError(root.find('.//faultstring').text)
             else:
                 return resp.group(1)
         else:
             envel = re.search('<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>', wsdlResponse.text, re.DOTALL) 
             root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
             if root.find('.//faultstring') is not None:
-                raise SoapFaultError(root.find(".//faultstring").text)
+                raise SoapFaultError(root.find('.//faultstring').text)
             else:
                 raise XrdInfoError(u'WSDL not found')
     except requests.exceptions.Timeout as e:
@@ -411,7 +411,7 @@ def wsdlMethods(wsdl):
         for operation in root.findall('.//wsdl:binding/wsdl:operation', NS):
             version = operation.find('./xrd:version', NS).text if operation.find('./xrd:version', NS) is not None else ''
             if 'name' in operation.attrib:
-                yield (operation.attrib['name'], version)
+                yield (u'' + operation.attrib['name'], u'' + version)
     except Exception as e:
         raise XrdInfoError(e)
 

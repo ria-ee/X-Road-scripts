@@ -1,11 +1,11 @@
 #!/usr/bin/python
 
+from six.moves.queue import Queue
+from threading import Thread
 import argparse
 import xrdinfo
 import six
 import sys
-from six.moves.queue import Queue
-from threading import Thread
 
 
 # By default return listMethods
@@ -64,7 +64,10 @@ if __name__ == '__main__':
         METHOD = 'allowedMethods'
 
     instance = None
-    if args.instance:
+    if args.instance and six.PY2:
+        # Convert to unicode
+        instance = args.instance.decode('utf-8')
+    elif args.instance:
         instance = args.instance
 
     timeout = DEFAULT_TIMEOUT
