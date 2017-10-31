@@ -22,7 +22,7 @@ additionally outputs message SigningTime.
 
 ## Global Configuration and Metadata services
 [xrdinfo.py](xrdinfo/xrdinfo.py) - Python module that can be imported and used in
-any Python2.7+ or Python3 application. It implements:
+any Python2.7+ or Python3.3+ application. It implements:
 * loading of global configuration from Security Server, Central Server or
   Configuration Proxy;
 * parsing of shared_params.xml;
