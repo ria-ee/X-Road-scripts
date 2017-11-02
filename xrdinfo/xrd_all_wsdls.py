@@ -3,12 +3,15 @@
 from six.moves.queue import Queue
 from threading import Thread, Lock, currentThread
 import argparse
+import hashlib
 import itertools
 import json
 import os
 import re
+import shutil
 import six
 import sys
+import time
 import xrdinfo
 
 
@@ -22,15 +25,34 @@ DEFAULT_TIMEOUT = 5.0
 DEFAULT_THREAD_COUNT = 1
 
 METHODS_HTML_TEMPL = u"""<!DOCTYPE html>
+<html>
 <head>
 <meta charset="utf-8">
 <title>All methods with WSDL descriptions</title>
 </head>
 <body>
 <h1>All methods with WSDL descriptions</h1>
-<p>The following data is also available in <a href="index.json">JSON</a> form.<p>
+<p>Report time: {repTime}</p>
+<p><a href="history.html">History</a></p>
+<p>Latest data in <a href="index.json">JSON</a> form.</p>
+<p>This report in <a href="index_{suffix}.json">JSON</a> form.</p>
 {body}</body>
+</html>
 """
+
+HISTORY_HTML_TEMPL = u"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>History</title>
+</head>
+<body>
+<h1>History</h1>
+{body}</body>
+</html>
+"""
+
+HISTORY_HEADER = u'<h1>History</h1>\n'
 
 
 def safe_print(content):
@@ -53,12 +75,52 @@ def makedirs(path):
         exit(0)
 
 
+def hashWsdls(path):
+    hashes = {}
+    for fileName in os.listdir(path):
+        s = re.search('^(\d+)\.wsdl$', fileName)
+        if s:
+            with open(u'{}/{}'.format(path, fileName), 'r') as f:
+                wsdl = f.read()
+                if six.PY3:
+                    # In PY2 this is already in bytes form
+                    wsdl = wsdl.encode('utf-8')
+            hashes[fileName] = hashlib.md5(wsdl).hexdigest()
+    return hashes
+
+
+def saveWsdl(path, hashes, wsdl):
+    wsdlHash = hashlib.md5(wsdl.encode('utf-8')).hexdigest()
+    maxWsdl = -1
+    for fileName in hashes.keys():
+        if wsdlHash == hashes[fileName]:
+            # Matching WSDL found
+            return fileName, hashes
+        s = re.search('^(\d+)\.wsdl$', fileName)
+        if s:
+            if int(s.group(1)) > maxWsdl:
+                maxWsdl = int(s.group(1))
+    # Creating new file
+    newFile = u'{}.wsdl'.format(int(maxWsdl) + 1)
+    with open(u'{}/{}'.format(path, newFile), 'w') as f:
+        if six.PY2:
+            f.write(wsdl.encode('utf-8'))
+        else:
+            f.write(wsdl)
+    hashes[newFile] = wsdlHash
+    return newFile, hashes
+
+
 def worker():
     while True:
         subsystem = workQueue.get()
         try:
+            wsdlRelPath = xrdinfo.stringify(subsystem)
+            wsdlPath = u'{}/{}'.format(args.path, wsdlRelPath)
+            makedirs(wsdlPath)
+            hashes = hashWsdls(wsdlPath)
+
             methodIndex = {}
-            cnt = itertools.count()
             skipMethods = False
             for method in xrdinfo.methods(addr=args.url, client=client, service=subsystem, method='listMethods', timeout=timeout, verify=verify, cert=cert):
                 if xrdinfo.stringify(method) in methodIndex:
@@ -87,20 +149,13 @@ def worker():
                     methodIndex[xrdinfo.stringify(method)] = ''
                     continue
 
-                txt = u''
-                wsdlRelName = u'{}/{}.wsdl'.format(xrdinfo.stringify(subsystem), next(cnt))
-                wsdlName = u'{}/{}'.format(args.path, wsdlRelName)
-                makedirs(os.path.dirname(wsdlName))
-                with open(wsdlName, 'w') as f:
-                    if six.PY2:
-                        f.write(wsdl.encode('utf-8'))
-                    else:
-                        f.write(wsdl)
-                txt = txt + u'{}: {}\n'.format(currentThread().getName(), wsdlName)
+                # TODO: update hashes!!!
+                wsdlName, hashes = saveWsdl(wsdlPath, hashes, wsdl)
+                txt = u'{}: {}\n'.format(currentThread().getName(), wsdlName)
                 try:
                     for wsdlMethod in xrdinfo.wsdlMethods(wsdl):
                         methodFullName = xrdinfo.stringify(subsystem + wsdlMethod)
-                        methodIndex[methodFullName] = wsdlRelName
+                        methodIndex[methodFullName] = u'{}/{}'.format(wsdlRelPath, wsdlName)
                         txt = txt + u'    {}\n'.format(methodFullName)
                 except xrdinfo.XrdInfoError as e:
                     txt = txt + u'WSDL parsing failed: {}\n'.format(e)
@@ -235,15 +290,41 @@ if __name__ == '__main__':
             jsonItem['wsdl'] = ''
         jsonData.append(jsonItem)
 
-    html = METHODS_HTML_TEMPL.format(body=body)
-    with open(u'{}/index.html'.format(args.path), 'w') as f:
+    repTime = time.localtime(time.time())
+    formatedTime = time.strftime('%Y-%m-%d %H:%M:%S', repTime)
+    suffix = time.strftime('%Y%m%d%H%M%S', repTime)
+    html = METHODS_HTML_TEMPL.format(repTime=formatedTime, suffix=suffix, body=body)
+    with open(u'{}/index_{}.html'.format(args.path, suffix), 'w') as f:
+        if six.PY2:
+            f.write(html.encode('utf-8'))
+        else:
+            f.write(html)
+    with open(u'{}/index_{}.json'.format(args.path, suffix), 'w') as f:
+        if six.PY2:
+            f.write(json.dumps(jsonData, indent=2, ensure_ascii=False).encode('utf-8'))
+        else:
+            json.dump(jsonData, f, indent=2, ensure_ascii=False)
+
+    historyItem = u'<p><a href="{}">{}</a></p>\n'.format(u'index_{}.html'.format(suffix), formatedTime)
+    try:
+        html = u''
+        with open(u'{}/history.html'.format(args.path), 'r') as f:
+            for line in f:
+                if six.PY2:
+                    line = line.decode('utf-8')
+                if line == HISTORY_HEADER:
+                    line = line + historyItem
+                html = html + line
+    except Exception as e:
+        # Cannot open or parse history.html
+        html = HISTORY_HTML_TEMPL.format(repTime=formatedTime, body=historyItem)
+
+    with open(u'{}/history.html'.format(args.path), 'w') as f:
         if six.PY2:
             f.write(html.encode('utf-8'))
         else:
             f.write(html)
 
-    with open(u'{}/index.json'.format(args.path), 'w') as f:
-        if six.PY2:
-            f.write(json.dumps(jsonData, indent=2, ensure_ascii=False).encode('utf-8'))
-        else:
-            json.dump(jsonData, f, indent=2, ensure_ascii=False)
+    # Replace index with latest report
+    shutil.copy(u'{}/index_{}.html'.format(args.path, suffix), u'{}/index.html'.format(args.path))
+    shutil.copy(u'{}/index_{}.json'.format(args.path, suffix), u'{}/index.json'.format(args.path))
