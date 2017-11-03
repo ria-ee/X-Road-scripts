@@ -163,7 +163,7 @@ def worker():
                 results.update(methodIndex)
         except xrdinfo.XrdInfoError as e:
             if VERBOSE:
-                safe_print(u'{}: {}\n'.format(currentThread().getName(), e))
+                safe_print(u'{}: {} - ERROR:\n{}\n'.format(currentThread().getName(), xrdinfo.stringify(subsystem), e))
         except Exception as e:
             safe_print(u'{}: {}: {}\n'.format(currentThread().getName(), type(e).__name__, e))
         finally:
