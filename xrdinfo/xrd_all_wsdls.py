@@ -80,11 +80,9 @@ def hashWsdls(path):
     for fileName in os.listdir(path):
         s = re.search('^(\d+)\.wsdl$', fileName)
         if s:
-            with open(u'{}/{}'.format(path, fileName), 'r') as f:
+            # Reading as bytes to avoid line ending conversion
+            with open(u'{}/{}'.format(path, fileName), 'rb') as f:
                 wsdl = f.read()
-                if six.PY3:
-                    # In PY2 this is already in bytes form
-                    wsdl = wsdl.encode('utf-8')
             hashes[fileName] = hashlib.md5(wsdl).hexdigest()
     return hashes
 
@@ -102,11 +100,9 @@ def saveWsdl(path, hashes, wsdl):
                 maxWsdl = int(s.group(1))
     # Creating new file
     newFile = u'{}.wsdl'.format(int(maxWsdl) + 1)
-    with open(u'{}/{}'.format(path, newFile), 'w') as f:
-        if six.PY2:
-            f.write(wsdl.encode('utf-8'))
-        else:
-            f.write(wsdl)
+    # Writing as bytes to avoid line ending conversion
+    with open(u'{}/{}'.format(path, newFile), 'wb') as f:
+        f.write(wsdl.encode('utf-8'))
     hashes[newFile] = wsdlHash
     return newFile, hashes
 
