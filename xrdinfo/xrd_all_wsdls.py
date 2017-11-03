@@ -145,7 +145,6 @@ def worker():
                     methodIndex[xrdinfo.stringify(method)] = ''
                     continue
 
-                # TODO: update hashes!!!
                 wsdlName, hashes = saveWsdl(wsdlPath, hashes, wsdl)
                 txt = u'{}: {}\n'.format(currentThread().getName(), wsdlName)
                 try:
