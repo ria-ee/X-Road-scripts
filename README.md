@@ -78,6 +78,12 @@ Environment monitoring is using Zabbix template
 [envmon_template.xml](zabbix/envmon_template.xml) that should be imported
 into Zabbix prior to execution of the collector.
 
+Collector requires [py-zabbix](https://github.com/adubkov/py-zabbix) package
+(tested with version 1.1.3) which can be installed with:
+```
+sudo pip install py-zabbix
+```
+
 ## Miscellaneous
 [rights_given.py](misc/rights_given.py) - Can be executed inside Security Server
 to display the list of Access Rights granted. This script is using psycopg2
