@@ -29,7 +29,7 @@ any Python2.7+ or Python3.3+ application. It implements:
 * listMethods and allowedMethods X-Road requests;
 * getWsdl X-Road request.
 
-There are also some example scripts that use xrdinfo module:
+There are also some scripts that use xrdinfo module:
 * [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of the
   X-Road request) methods (services) in X-Road instance.
