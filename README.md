@@ -29,7 +29,7 @@ any Python2.7+ or Python3.3+ application. It implements:
 * listMethods and allowedMethods X-Road requests;
 * getWsdl X-Road request.
 
-There ara also some example scripts that use xrdinfo module:
+There are also some example scripts that use xrdinfo module:
 * [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of the
   X-Road request) methods (services) in X-Road instance.
@@ -98,7 +98,7 @@ sudo apt-get install python-psycopg2
 sudo apt-get install python3-psycopg2
 ```
 
-The result is in CSV format and is outputed to STDOUT.
+The result is in CSV format and is outputted to STDOUT.
 
 Usage (Python2):
 ```
