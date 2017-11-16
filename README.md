@@ -114,6 +114,10 @@ be executed inside Security Server to display time of the oldest message that
 was not timestamped. Returns "None" if all messages are timestamped. This
 script is using psycopg2 python module.
 
+[last_successful_message.py](misc/last_successful_message.py) - Can
+be executed inside Operational Monitoring machine (by default Security Server
+machine) to display time of the last successful message. This script is using
+psycopg2 python module.
 
 [certs_expiration.py](misc/certs_expiration.py) - Can be executed inside
 Security Server to display expiration dates of all active and registered
