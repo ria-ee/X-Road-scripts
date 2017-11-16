@@ -108,3 +108,13 @@ Usage (Python3):
 ```
 sudo su xroad -c "python3 rights.py" > rights.csv
 ```
+
+[oldest_log_without_timestamp.py](misc/oldest_log_without_timestamp.py) - Can
+be executed inside Security Server to display time of the oldest message that
+was not timestamped. Returns "None" if all messages are timestamped. This
+script is using psycopg2 python module.
+
+
+[certs_expiration.py](misc/certs_expiration.py) - Can be executed inside
+Security Server to display expiration dates of all active and registered
+certificates.
