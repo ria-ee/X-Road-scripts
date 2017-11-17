@@ -122,3 +122,8 @@ psycopg2 python module.
 [certs_expiration.py](misc/certs_expiration.py) - Can be executed inside
 Security Server to display expiration dates of all active and registered
 certificates.
+
+[ocsp_produced.py](misc/ocsp_produced.py) - Can be executed inside
+Security Server to display OCSP production time (the time of OCSP responce
+production) for all active and registered certificates. Returns "ERROR" if
+ocsp responce is not found.

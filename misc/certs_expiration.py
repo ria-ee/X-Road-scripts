@@ -22,7 +22,7 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
             pem = '-----BEGIN CERTIFICATE-----\n{}-----END CERTIFICATE-----\n'.format(contents)
             p = Popen(['openssl', 'x509', '-noout', '-enddate'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
             stdout, stderr = p.communicate(pem.encode('utf-8'))
-            r = re.search('^notAfter=(.+)$', stdout.decode('utf-8'))
+            r = re.match('^notAfter=(.+)$', stdout.decode('utf-8'))
             expiration = r.group(1)
             # Convert time format
             t = time.strptime(expiration, '%b %d %H:%M:%S %Y %Z')
