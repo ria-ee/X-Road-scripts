@@ -112,18 +112,18 @@ sudo su xroad -c "python3 rights.py" > rights.csv
 [oldest_log_without_timestamp.py](misc/oldest_log_without_timestamp.py) - Can
 be executed inside Security Server to display time of the oldest message that
 was not timestamped. Returns "None" if all messages are timestamped. This
-script is using psycopg2 python module.
+script is using psycopg2 python module. Returns time in UTC.
 
 [last_successful_message.py](misc/last_successful_message.py) - Can
 be executed inside Operational Monitoring machine (by default Security Server
 machine) to display time of the last successful message. This script is using
-psycopg2 python module.
+psycopg2 python module. Returns time in UTC.
 
 [certs_expiration.py](misc/certs_expiration.py) - Can be executed inside
 Security Server to display expiration dates of all active and registered
-certificates.
+certificates. Returns time in UTC.
 
 [ocsp_produced.py](misc/ocsp_produced.py) - Can be executed inside
 Security Server to display OCSP production time (the time of OCSP responce
 production) for all active and registered certificates. Returns "ERROR" if
-ocsp responce is not found.
+ocsp responce is not found. Returns time in UTC.
