@@ -86,8 +86,9 @@ sudo pip install py-zabbix
 
 ## Miscellaneous
 [rights_given.py](misc/rights_given.py) - Can be executed inside Security Server
-to display the list of Access Rights granted. This script is using psycopg2
-python module that can be installed with the following command:
+to display the list of Access Rights granted. Time is displayed in local timezone.
+This script is using psycopg2 python module that can be installed with
+the following command:
 
 (Python2)
 ```
@@ -102,11 +103,11 @@ The result is in CSV format and is outputted to STDOUT.
 
 Usage (Python2):
 ```
-sudo su xroad -c "python rights.py" > rights.csv
+sudo su xroad -c "python rights_given.py" > rights.csv
 ```
 Usage (Python3):
 ```
-sudo su xroad -c "python3 rights.py" > rights.csv
+sudo su xroad -c "python3 rights_given.py" > rights.csv
 ```
 
 [oldest_log_without_timestamp.py](misc/oldest_log_without_timestamp.py) - Can
