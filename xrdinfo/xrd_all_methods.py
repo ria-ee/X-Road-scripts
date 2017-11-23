@@ -109,8 +109,12 @@ if __name__ == '__main__':
         t.start()
 
     # Populate the queue
-    for subsystem in xrdinfo.registeredSubsystems(sharedParams):
-        workQueue.put(subsystem)
+    try:
+        for subsystem in xrdinfo.registeredSubsystems(sharedParams):
+            workQueue.put(subsystem)
+    except (xrdinfo.XrdInfoError) as e:
+        print_error(e)
+        exit(1)
 
     # block until all tasks are done
     workQueue.join()

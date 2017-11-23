@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # IP or URI of Security Server
-SECURITYSERVER="xtee7.ci.kit"
+SECURITYSERVER="xtee9.ci.kit"
 
 # A cache file is used when central server does not reply
-SERVERS_CACHE="/var/tmp/xtee_servers_xtee7.ci.kit.txt"
+SERVERS_CACHE="/var/tmp/xtee_servers_xtee9.ci.kit.txt"
 
 DATA=`../xrdinfo/xrd_servers.py -s $SECURITYSERVER`
 

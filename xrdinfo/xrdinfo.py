@@ -286,6 +286,20 @@ def servers(sharedParams):
         raise XrdInfoError(e)
 
 
+def addrIPs(address):
+    """Resolve DNS name to IP addresses.
+       Unresolved DNS names are silently ignored.
+    """
+    try:
+        for ip in socket.gethostbyname_ex(address)[2]:
+            yield (u'' + ip)
+    except (socket.gaierror):
+        # Ignoring DNS name not found error
+        pass
+    except Exception as e:
+        raise XrdInfoError(e)
+
+
 def serversIPs(sharedParams):
     """List IP adresses of Security Servers in sharedParams.
        Unresolved DNS names are silently ignored.
@@ -294,12 +308,8 @@ def serversIPs(sharedParams):
         root = ET.fromstring(sharedParams.encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
         for server in root.findall('./securityServer'):
             address = server.find('address').text
-            try:
-                for ip in socket.gethostbyname_ex(address)[2]:
-                    yield (u'' + ip)
-            except (socket.gaierror):
-                # Ignoring DNS name not found error
-                pass
+            for ip in addrIPs(address):
+                yield (u'' + ip)
     except Exception as e:
         raise XrdInfoError(e)
 

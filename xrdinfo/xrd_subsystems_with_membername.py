@@ -10,6 +10,15 @@ import sys
 DEFAULT_TIMEOUT=5.0
 
 
+def print_error(content):
+    """Thread safe and unicode safe error printer."""
+    content = u"ERROR: {}\n".format(content)
+    if six.PY2:
+        sys.stderr.write(content.encode('utf-8'))
+    else:
+        sys.stderr.write(content)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='List X-Road Subsystems with Member name.',
