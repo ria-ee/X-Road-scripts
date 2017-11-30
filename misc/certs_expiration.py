@@ -12,7 +12,7 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
     for key in root.findall('./device/key'):
         type = 'SIGN' if key.attrib['usage'] == 'SIGNING' else 'AUTH'
         keyId = key.find('./keyId').text
-        friendlyName = key.find('./friendlyName').text if key.find('./friendlyName').text is not None else ''
+        friendlyName = key.find('./friendlyName').text if key.find('./friendlyName') is not None and key.find('./friendlyName').text is not None else ''
         for cert in key.findall('./cert'):
             if not (cert.attrib['active'] == 'true' and cert.find('./status').text == 'registered'):
                 continue
