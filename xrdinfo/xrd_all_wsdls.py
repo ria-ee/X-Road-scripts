@@ -180,7 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('path', metavar='PATH', help='path for storing results.')
     parser.add_argument('-v', help='verbose output', action='store_true')
     parser.add_argument('-t', metavar='TIMEOUT', help='timeout for HTTP query', type=float)
-    parser.add_argument('--threads', metavar='THREADS', help='amount of threads to use', type=int)
+    parser.add_argument('--threads', metavar='THREADS', help='amount of threads to use', type=int, default=0)
     parser.add_argument('--verify', metavar='CERT_PATH', help='validate peer TLS certificate using CA certificate file.')
     parser.add_argument('--cert', metavar='CERT_PATH', help='use TLS certificate for HTTPS requests.')
     parser.add_argument('--key', metavar='KEY_PATH', help='private key for TLS certificate.')

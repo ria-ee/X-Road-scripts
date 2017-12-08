@@ -29,7 +29,8 @@ cur.execute("""select to_timestamp(min( time )::float/1000) at time zone 'UTC'
     from logrecord
     where discriminator::text = 'm'::text AND signaturehash IS NOT NULL;""")
 rec = cur.fetchone()
-print(rec[0])
+if rec[0] is not None:
+    print(rec[0])
 
 cur.close()
 conn.close()
