@@ -1,7 +1,19 @@
 #!/usr/bin/python
 
+import argparse
+import calendar
 import psycopg2
 import re
+import time
+
+
+parser = argparse.ArgumentParser(
+    description='Get time of oldest X-Road message without timestamp.',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog='Status returns number of seconds since X-Road messages are awaiting for timestamp.'
+)
+parser.add_argument('-s', help='Output status only', action="store_true")
+args = parser.parse_args()
 
 with open('/etc/xroad/db.properties', 'r') as dbConf:
     for line in dbConf:
@@ -29,8 +41,14 @@ cur.execute("""select to_timestamp(min( time )::float/1000) at time zone 'UTC'
     from logrecord
     where discriminator::text = 'm'::text AND signaturehash IS NOT NULL;""")
 rec = cur.fetchone()
+
 if rec[0] is not None:
-    print(rec[0])
+    if args.s:
+        log_time = str(rec[0]).split('.')[0]
+        t = time.strptime(log_time, '%Y-%m-%d %H:%M:%S')
+        print(int(time.time()) - calendar.timegm(t))
+    else:
+        print(rec[0])
 
 cur.close()
 conn.close()

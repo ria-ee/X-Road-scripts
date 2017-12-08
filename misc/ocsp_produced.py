@@ -1,12 +1,22 @@
 #!/usr/bin/python
 
 from subprocess import Popen, PIPE, check_output
+import argparse
 import base64
+import calendar
 import os
 import re
 import time
 import xml.etree.ElementTree as ET
 
+
+parser = argparse.ArgumentParser(
+    description='Get OCSP production time for X-Road certificates.',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog='Status returns number of seconds since production of oldest OCSP responce.'
+)
+parser.add_argument('-s', help='Output status only', action="store_true")
+args = parser.parse_args()
 
 cache = {}
 for fileName in os.listdir('/var/cache/xroad'):
@@ -17,6 +27,7 @@ for fileName in os.listdir('/var/cache/xroad'):
         if r and r.group(1):
             cache[r.group(1)] = out
 
+ocsp_time = 0
 with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
     root = ET.fromstring(keyconf.read())
     for key in root.findall('./device/key'):
@@ -40,6 +51,16 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
                     if r and r.group(1):
                         t = time.strptime(r.group(1), '%b %d %H:%M:%S %Y %Z')
                         produced = time.strftime('%Y-%m-%d %H:%M:%S', t)
-                        print('{}\t{}\t{}\t{}'.format(produced, type, keyId, friendlyName))
-                else:
+                        if not args.s:
+                            print('{}\t{}\t{}\t{}'.format(produced, type, keyId, friendlyName))
+                        elif not ocsp_time or calendar.timegm(t) > ocsp_time:
+                            ocsp_time = calendar.timegm(t)
+                elif not args.s:
                     print('ERROR\t{}\t{}\t{}'.format(type, keyId, friendlyName))
+                else:
+                    # One of certificats does not have OCSP responce
+                    print(1000000000)
+                    exit(0)
+
+if args.s and ocsp_time:
+    print(int(time.time()) - ocsp_time)

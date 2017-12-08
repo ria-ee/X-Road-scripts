@@ -1,12 +1,23 @@
 #!/usr/bin/python
 
 from subprocess import Popen, PIPE
+import argparse
+import calendar
 import base64
 import re
 import time
 import xml.etree.ElementTree as ET
 
 
+parser = argparse.ArgumentParser(
+    description='Get time of X-Road certificates expiration.',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog='Status returns number of seconds until expiration of certificate closest to expiry.'
+)
+parser.add_argument('-s', help='Output status only', action="store_true")
+args = parser.parse_args()
+
+cert_time = 0
 with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
     root = ET.fromstring(keyconf.read())
     for key in root.findall('./device/key'):
@@ -27,4 +38,13 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
             # Convert time format
             t = time.strptime(expiration, '%b %d %H:%M:%S %Y %Z')
             expiration = time.strftime('%Y-%m-%d %H:%M:%S', t)
-            print('{}\t{}\t{}\t{}'.format(expiration, type, keyId, friendlyName))
+            if not args.s:
+                print('{}\t{}\t{}\t{}'.format(expiration, type, keyId, friendlyName))
+            elif not cert_time or calendar.timegm(t) < cert_time:
+                cert_time = calendar.timegm(t)
+
+if args.s and cert_time:
+    if int(time.time()) > cert_time:
+        print(0)
+    else:
+        print(cert_time - int(time.time()))

@@ -1,7 +1,19 @@
 #!/usr/bin/python
 
+import argparse
+import calendar
 import psycopg2
 import re
+import time
+
+
+parser = argparse.ArgumentParser(
+    description='Get time of last successful X-Road message.',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog='Status returns number of seconds since last successful X-Road message.'
+)
+parser.add_argument('-s', help='Output status only', action="store_true")
+args = parser.parse_args()
 
 with open('/etc/xroad/db.properties', 'r') as dbConf:
     for line in dbConf:
@@ -29,7 +41,13 @@ cur.execute("""select to_timestamp(max(monitoring_data_ts)) at time zone 'UTC'
     from operational_data
     where succeeded;""")
 rec = cur.fetchone()
-print(rec[0])
+
+if rec[0] is not None:
+    if args.s:
+        t = time.strptime(str(rec[0]), '%Y-%m-%d %H:%M:%S')
+        print(int(time.time()) - calendar.timegm(t))
+    else:
+        print(rec[0])
 
 cur.close()
 conn.close()
