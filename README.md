@@ -128,3 +128,6 @@ certificates. Returns time in UTC.
 Security Server to display OCSP production time (the time of OCSP responce
 production) for all active and registered certificates. Returns "ERROR" if
 ocsp responce is not found. Returns time in UTC.
+
+[globalconf_expiration.py](misc/globalconf_expiration.py) - Can be executed
+inside Security Server to display expiration times of global configuration parts.
