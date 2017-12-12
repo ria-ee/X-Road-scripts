@@ -112,7 +112,7 @@ sudo su xroad -c "python3 rights_given.py" > rights.csv
 
 [oldest_log_without_timestamp.py](misc/oldest_log_without_timestamp.py) - Can
 be executed inside Security Server to display time of the oldest message that
-was not timestamped. Returns "None" if all messages are timestamped. This
+was not timestamped. Returns nothing if all messages are timestamped. This
 script is using psycopg2 python module. Returns time in UTC.
 
 [last_successful_message.py](misc/last_successful_message.py) - Can

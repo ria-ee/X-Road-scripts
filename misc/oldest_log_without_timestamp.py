@@ -49,6 +49,8 @@ if rec[0] is not None:
         print(int(time.time()) - calendar.timegm(t))
     else:
         print(rec[0])
+elif args.s:
+    print(0)
 
 cur.close()
 conn.close()
