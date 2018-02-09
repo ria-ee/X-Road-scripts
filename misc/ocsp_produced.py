@@ -46,15 +46,14 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
             r = re.match('^serial=(.+)$', stdout.decode('utf-8'))
             if r and r.group(1):
                 serial = r.group(1)
-                if serial in cache and re.search('^    Cert Status: good$', cache[serial], re.MULTILINE):
-                    r = re.search('^    Produced At: (.+)$', cache[serial] , re.MULTILINE)
-                    if r and r.group(1):
-                        t = time.strptime(r.group(1), '%b %d %H:%M:%S %Y %Z')
-                        produced = time.strftime('%Y-%m-%d %H:%M:%S', t)
-                        if not args.s:
-                            print('{}\t{}\t{}\t{}'.format(produced, type, keyId, friendlyName))
-                        elif not ocsp_time or calendar.timegm(t) > ocsp_time:
-                            ocsp_time = calendar.timegm(t)
+                r = re.search('^    Produced At: (.+)$', cache[serial] , re.MULTILINE)
+                if serial in cache and r and re.search('^    Cert Status: good$', cache[serial], re.MULTILINE):
+                    t = time.strptime(r.group(1), '%b %d %H:%M:%S %Y %Z')
+                    produced = time.strftime('%Y-%m-%d %H:%M:%S', t)
+                    if not args.s:
+                        print('{}\t{}\t{}\t{}'.format(produced, type, keyId, friendlyName))
+                    elif not ocsp_time or calendar.timegm(t) > ocsp_time:
+                        ocsp_time = calendar.timegm(t)
                 elif not args.s:
                     print('ERROR\t{}\t{}\t{}'.format(type, keyId, friendlyName))
                 else:
