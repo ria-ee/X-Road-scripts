@@ -46,7 +46,7 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
             r = re.match('^serial=(.+)$', stdout.decode('utf-8'))
             if r and r.group(1):
                 serial = r.group(1)
-                if serial in cache:
+                if serial in cache and re.search('^    Cert Status: good$', cache[serial], re.MULTILINE):
                     r = re.search('^    Produced At: (.+)$', cache[serial] , re.MULTILINE)
                     if r and r.group(1):
                         t = time.strptime(r.group(1), '%b %d %H:%M:%S %Y %Z')
@@ -58,7 +58,7 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
                 elif not args.s:
                     print('ERROR\t{}\t{}\t{}'.format(type, keyId, friendlyName))
                 else:
-                    # One of certificats does not have OCSP responce
+                    # One of certificates does not have OCSP response
                     print(1000000000)
                     exit(0)
 
