@@ -391,7 +391,7 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
         wsdlResponse.raise_for_status()
         wsdlResponse.encoding = 'utf-8'
 
-        resp = re.search('--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>.+--xroad.+content-type:text/xml\r\n\r\n(.+)\r\n--xroad.+', wsdlResponse.text, re.DOTALL)
+        resp = re.search('--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>.+--xroad.+content-type:text/xml.*?\r\n\r\n(.+)\r\n--xroad.+', wsdlResponse.text, re.DOTALL)
         if resp:
             envel = re.search('<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>', resp.group(1), re.DOTALL)
             if envel:
