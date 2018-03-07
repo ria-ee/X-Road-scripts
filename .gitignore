@@ -5,3 +5,6 @@ __pycache__/
 
 # Configuration files contain passwords
 *.cfg
+
+.idea/
+venv*/
