@@ -2,8 +2,6 @@
 
 """X-Road Health and Environment monitoring collector for Zabbix."""
 
-# TODO: Better exception handling instead of general "Exception".
-
 # pip install py-zabbix
 from pyzabbix import ZabbixMetric, ZabbixSender, ZabbixAPI
 import argparse
@@ -11,65 +9,47 @@ import re
 import requests
 import sys
 import threading
-import time
 import uuid
 import six
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 import six.moves.urllib.parse as urlparse
-from six.moves import queue as Queue
-from six.moves import configparser as ConfigParser
+from six.moves import queue
+from six.moves import configparser
 
-# Collect Envinronmental Monitoring data instead of Health data
-ENVMON = False
-
-##############################
-### Default Configurations ###
-##############################
-
-# Dict containing configuration
-CONF = {}
-
-# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
-
-CONF['DEBUG'] = 2
-
-# Zabbix configuration
-CONF['ZABBIX_URL'] = 'http://localhost/'
-CONF['ZABBIX_SENDER_PORT'] = 10051
-CONF['ZABBIX_USER'] = 'zabbix_user'
-CONF['ZABBIX_PASS'] = 'zabbix_pass'
-CONF['ZABBIX_GROUP_ID'] = '2' # "Linux servers"
-CONF['ZABBIX_TRAPPER_TYPE'] = '2' # "Zabbix trapper"
-
-# EnvMon template configuration
-CONF['ENVMON_TEMPLATE_ID'] = '10242'
-CONF['ENVMON_TEMPLATE_NAME'] = 'X-Road Environmental monitoring'
-
-# Security server URL used by Central monitoring:
-CONF['SERVER_URL'] = 'http://xtee9.ci.kit'
-
-# Path to TLS certificate and key in case when Security Server requires TLS authentication
-CONF['TLS_CERT'] = ''
-CONF['TLS_KEY'] = ''
-
-# Client subsystem that performs health data collection:
-CONF['MONITORING_CLIENT_INST'] = 'XTEE-CI-XM'
-CONF['MONITORING_CLIENT_CLASS'] = 'GOV'
-CONF['MONITORING_CLIENT_MEMBER'] = '00000001'
-CONF['MONITORING_CLIENT_SUBSYSTEM'] = 'Central monitoring client'
-
-# How many threads to use for data quering.
-CONF['THREAD_COUNT'] = 2
-
-# Timeout for http requests
-CONF['TIMEOUT'] = 15.0
-
-# List of servers to collect data from
-CONF['SERVERS'] = u''
-
-########################
-### Global Constants ###
-########################
+# Dict containing default configuration
+DEFAULT_PARAMS = {
+    # Collect Environmental Monitoring data instead of Health data
+    'envmon': False,
+    # Debug levels:
+    # 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+    'debug': 2,
+    # Zabbix configuration
+    'zabbix_url': 'http://localhost/',
+    'zabbix_sender_port': 10051,
+    'zabbix_user': 'zabbix_user',
+    'zabbix_pass': 'zabbix_pass',
+    'zabbix_group_id': '2',  # "Linux servers"
+    'zabbix_trapper_type': '2',  # "Zabbix trapper"
+    # EnvMon template configuration
+    'envmon_template_id': '10242',
+    'envmon_template_name': 'X-Road Environmental monitoring',
+    # Security server URL used by Central monitoring:
+    'server_url': 'http://xrd0.ss.dns',
+    # Path to TLS certificate and key in case when Security Server
+    # requires TLS authentication
+    'tls_cert': '',
+    'tls_key': '',
+    # Client subsystem that performs health data collection:
+    'monitoring_client_inst': 'INST',
+    'monitoring_client_class': 'GOV',
+    'monitoring_client_member': '00000000',
+    'monitoring_client_subsystem': 'Central monitoring',
+    # How many threads to use for data querying.
+    'thread_count': 2,
+    # Timeout for http requests
+    'timeout': 15.0,
+    # List of servers to collect data from
+    'servers': u''}
 
 # Default configuration file
 CONF_FILE = 'metrics.cfg'
@@ -78,7 +58,9 @@ CONF_FILE = 'metrics.cfg'
 CONF_SECTION = 'metrics'
 
 # Namespace of monitoring service
-NS = {'m': 'http://x-road.eu/xsd/monitoring', 'om': 'http://x-road.eu/xsd/op-monitoring.xsd', 'id': 'http://x-road.eu/xsd/identifiers'}
+NS = {'m': 'http://x-road.eu/xsd/monitoring',
+      'om': 'http://x-road.eu/xsd/op-monitoring.xsd',
+      'id': 'http://x-road.eu/xsd/identifiers'}
 
 # Zabbix value types:
 #     "0": Numeric (float)
@@ -88,28 +70,41 @@ NS = {'m': 'http://x-road.eu/xsd/monitoring', 'om': 'http://x-road.eu/xsd/op-mon
 #     "4": Text
 # Definitions of Server Items
 SERVER_HEALTH_ITEMS = [
-    {'key': 'monitoringStartupTimestamp', 'type': '3', 'units': 'ms', 'history': '7', 'description': 'The Unix timestamp in milliseconds when the monitoring system was started.'},
-    {'key': 'statisticsPeriodSeconds', 'type': '3', 'units': 's', 'history': '7', 'description': 'Duration of the statistics period in seconds.'},
-]
+    {'key': 'monitoringStartupTimestamp', 'type': '3', 'units': 'ms', 'history': '7',
+     'description': 'The Unix timestamp in milliseconds when the monitoring system was started.'},
+    {'key': 'statisticsPeriodSeconds', 'type': '3', 'units': 's', 'history': '7',
+     'description': 'Duration of the statistics period in seconds.'}]
+
 # Definitions of Service Items
 SERVICE_HEALTH_ITEMS = [
-    {'key': 'successfulRequestCount', 'type': '3', 'units': None, 'history': '7', 'description': 'The number of successful requests occurred during the last period.'},
-    {'key': 'unsuccessfulRequestCount', 'type': '3', 'units': None, 'history': '7', 'description': 'The number of unsuccessful requests occurred during the last period.'},
-
-    {'key': 'requestMinDuration', 'type': '3', 'units': 'ms', 'history': '7', 'description': 'The minimum duration of the request in milliseconds.'},
-    {'key': 'requestAverageDuration', 'type': '0', 'units': 'ms', 'history': '7', 'description': 'The average duration of the request in milliseconds.'},
-    {'key': 'requestMaxDuration', 'type': '3', 'units': 'ms', 'history': '7', 'description': 'The maximum duration of the request in milliseconds.'},
-    {'key': 'requestDurationStdDev', 'type': '0', 'units': 'ms', 'history': '7', 'description': 'The standard deviation of the duration of the requests.'},
-    {'key': 'requestMinSoapSize', 'type': '3', 'units': 'B', 'history': '7', 'description': 'The minimum SOAP message size of the request in bytes.'},
-    {'key': 'requestAverageSoapSize', 'type': '0', 'units': 'B', 'history': '7', 'description': 'The average SOAP message size of the request in bytes.'},
-    {'key': 'requestMaxSoapSize', 'type': '3', 'units': 'B', 'history': '7', 'description': 'The maximum SOAP message size of the request in bytes.'},
-    {'key': 'requestSoapSizeStdDev', 'type': '0', 'units': 'B', 'history': '7', 'description': 'The standard deviation of the SOAP message size of the request.'},
-    {'key': 'responseMinSoapSize', 'type': '3', 'units': 'B', 'history': '7', 'description': 'The minimum SOAP message size of the response in bytes.'},
-    {'key': 'responseAverageSoapSize', 'type': '0', 'units': 'B', 'history': '7', 'description': 'The average SOAP message size of the response in bytes.'},
-    {'key': 'responseMaxSoapSize', 'type': '3', 'units': 'B', 'history': '7', 'description': 'The maximum SOAP message size of the response in bytes.'},
-    {'key': 'responseSoapSizeStdDev', 'type': '0', 'units': 'B', 'history': '7', 'description': 'The standard deviation of the SOAP message size of the response.'},
-]
-
+    {'key': 'successfulRequestCount', 'type': '3', 'units': None, 'history': '7',
+     'description': 'The number of successful requests occurred during the last period.'},
+    {'key': 'unsuccessfulRequestCount', 'type': '3', 'units': None, 'history': '7',
+     'description': 'The number of unsuccessful requests occurred during the last period.'},
+    {'key': 'requestMinDuration', 'type': '3', 'units': 'ms', 'history': '7',
+     'description': 'The minimum duration of the request in milliseconds.'},
+    {'key': 'requestAverageDuration', 'type': '0', 'units': 'ms', 'history': '7',
+     'description': 'The average duration of the request in milliseconds.'},
+    {'key': 'requestMaxDuration', 'type': '3', 'units': 'ms', 'history': '7',
+     'description': 'The maximum duration of the request in milliseconds.'},
+    {'key': 'requestDurationStdDev', 'type': '0', 'units': 'ms', 'history': '7',
+     'description': 'The standard deviation of the duration of the requests.'},
+    {'key': 'requestMinSoapSize', 'type': '3', 'units': 'B', 'history': '7',
+     'description': 'The minimum SOAP message size of the request in bytes.'},
+    {'key': 'requestAverageSoapSize', 'type': '0', 'units': 'B', 'history': '7',
+     'description': 'The average SOAP message size of the request in bytes.'},
+    {'key': 'requestMaxSoapSize', 'type': '3', 'units': 'B', 'history': '7',
+     'description': 'The maximum SOAP message size of the request in bytes.'},
+    {'key': 'requestSoapSizeStdDev', 'type': '0', 'units': 'B', 'history': '7',
+     'description': 'The standard deviation of the SOAP message size of the request.'},
+    {'key': 'responseMinSoapSize', 'type': '3', 'units': 'B', 'history': '7',
+     'description': 'The minimum SOAP message size of the response in bytes.'},
+    {'key': 'responseAverageSoapSize', 'type': '0', 'units': 'B', 'history': '7',
+     'description': 'The average SOAP message size of the response in bytes.'},
+    {'key': 'responseMaxSoapSize', 'type': '3', 'units': 'B', 'history': '7',
+     'description': 'The maximum SOAP message size of the response in bytes.'},
+    {'key': 'responseSoapSizeStdDev', 'type': '0', 'units': 'B', 'history': '7',
+     'description': 'The standard deviation of the SOAP message size of the response.'}]
 
 ENVMON_METRICS = [
     {'name': 'proxyVersion', 'type': 'stringMetric'},
@@ -123,8 +118,7 @@ ENVMON_METRICS = [
     {'name': 'MaxFileDescriptorCount', 'type': 'numericMetric'},
     {'name': 'OperatingSystem', 'type': 'stringMetric'},
     {'name': 'TotalPhysicalMemory', 'type': 'numericMetric'},
-    {'name': 'TotalSwapSpace', 'type': 'numericMetric'},
-]
+    {'name': 'TotalSwapSpace', 'type': 'numericMetric'}]
 
 HEALTH_REQUEST_TEMPLATE = u"""<SOAP-ENV:Envelope
        xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
@@ -133,22 +127,22 @@ HEALTH_REQUEST_TEMPLATE = u"""<SOAP-ENV:Envelope
        xmlns:om="http://x-road.eu/xsd/op-monitoring.xsd">
     <SOAP-ENV:Header>
         <xrd:client id:objectType="SUBSYSTEM">
-            <id:xRoadInstance>{monitorInst}</id:xRoadInstance>
-            <id:memberClass>{monitorClass}</id:memberClass>
-            <id:memberCode>{monitorMember}</id:memberCode>
-            <id:subsystemCode>{monitorSubsystem}</id:subsystemCode>
+            <id:xRoadInstance>{monitor_instance}</id:xRoadInstance>
+            <id:memberClass>{monitor_class}</id:memberClass>
+            <id:memberCode>{monitor_member}</id:memberCode>
+            <id:subsystemCode>{monitor_subsystem}</id:subsystemCode>
         </xrd:client>
         <xrd:service id:objectType="SERVICE">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
             <id:serviceCode>getSecurityServerHealthData</id:serviceCode>
         </xrd:service>
         <xrd:securityServer id:objectType="SERVER">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
-            <id:serverCode>{server}</id:serverCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
+            <id:serverCode>{server_code}</id:serverCode>
         </xrd:securityServer>
         <xrd:id>{uuid}</xrd:id>
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
@@ -166,22 +160,22 @@ ENVMON_REQUEST_TEMPLATE = u"""<SOAP-ENV:Envelope
        xmlns:m="http://x-road.eu/xsd/monitoring">
     <SOAP-ENV:Header>
         <xrd:client id:objectType="SUBSYSTEM">
-            <id:xRoadInstance>{monitorInst}</id:xRoadInstance>
-            <id:memberClass>{monitorClass}</id:memberClass>
-            <id:memberCode>{monitorMember}</id:memberCode>
-            <id:subsystemCode>{monitorSubsystem}</id:subsystemCode>
+            <id:xRoadInstance>{monitor_instance}</id:xRoadInstance>
+            <id:memberClass>{monitor_class}</id:memberClass>
+            <id:memberCode>{monitor_member}</id:memberCode>
+            <id:subsystemCode>{monitor_subsystem}</id:subsystemCode>
         </xrd:client>
         <xrd:service id:objectType="SERVICE">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
             <id:serviceCode>getSecurityServerMetrics</id:serviceCode>
         </xrd:service>
         <xrd:securityServer id:objectType="SERVER">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
-            <id:serverCode>{server}</id:serverCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
+            <id:serverCode>{server_code}</id:serverCode>
         </xrd:securityServer>
         <xrd:id>{uuid}</xrd:id>
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
@@ -199,21 +193,21 @@ HEALTH_REQUEST_MEMBER_TEMPLATE = u"""<SOAP-ENV:Envelope
        xmlns:om="http://x-road.eu/xsd/op-monitoring.xsd">
     <SOAP-ENV:Header>
         <xrd:client id:objectType="MEMBER">
-            <id:xRoadInstance>{monitorInst}</id:xRoadInstance>
-            <id:memberClass>{monitorClass}</id:memberClass>
-            <id:memberCode>{monitorMember}</id:memberCode>
+            <id:xRoadInstance>{monitor_instance}</id:xRoadInstance>
+            <id:memberClass>{monitor_class}</id:memberClass>
+            <id:memberCode>{monitor_member}</id:memberCode>
         </xrd:client>
         <xrd:service id:objectType="SERVICE">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
             <id:serviceCode>getSecurityServerHealthData</id:serviceCode>
         </xrd:service>
         <xrd:securityServer id:objectType="SERVER">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
-            <id:serverCode>{server}</id:serverCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
+            <id:serverCode>{server_code}</id:serverCode>
         </xrd:securityServer>
         <xrd:id>{uuid}</xrd:id>
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
@@ -231,21 +225,21 @@ ENVMON_REQUEST_MEMBER_TEMPLATE = u"""<SOAP-ENV:Envelope
        xmlns:m="http://x-road.eu/xsd/monitoring">
     <SOAP-ENV:Header>
         <xrd:client id:objectType="MEMBER">
-            <id:xRoadInstance>{monitorInst}</id:xRoadInstance>
-            <id:memberClass>{monitorClass}</id:memberClass>
-            <id:memberCode>{monitorMember}</id:memberCode>
+            <id:xRoadInstance>{monitor_instance}</id:xRoadInstance>
+            <id:memberClass>{monitor_class}</id:memberClass>
+            <id:memberCode>{monitor_member}</id:memberCode>
         </xrd:client>
         <xrd:service id:objectType="SERVICE">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
             <id:serviceCode>getSecurityServerMetrics</id:serviceCode>
         </xrd:service>
         <xrd:securityServer id:objectType="SERVER">
-            <id:xRoadInstance>{inst}</id:xRoadInstance>
-            <id:memberClass>{memberClass}</id:memberClass>
-            <id:memberCode>{member}</id:memberCode>
-            <id:serverCode>{server}</id:serverCode>
+            <id:xRoadInstance>{instance}</id:xRoadInstance>
+            <id:memberClass>{member_class}</id:memberClass>
+            <id:memberCode>{member_code}</id:memberCode>
+            <id:serverCode>{server_code}</id:serverCode>
         </xrd:securityServer>
         <xrd:id>{uuid}</xrd:id>
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
@@ -266,6 +260,7 @@ def print_debug(content):
     else:
         sys.stdout.write(content)
 
+
 def print_error(content):
     """Thread safe and unicode safe error printer."""
     content = u"{}: ERROR: '{}'\n".format(threading.currentThread().getName(), content)
@@ -274,120 +269,161 @@ def print_error(content):
     else:
         sys.stderr.write(content)
 
-def loadConf(confArg):
+
+def load_conf(conf_arg):
     """ Load configuration from file."""
-    config = ConfigParser.RawConfigParser()
-    confName = CONF_FILE
-    if confArg:
+    params = DEFAULT_PARAMS
+    config = configparser.RawConfigParser()
+    conf_name = CONF_FILE
+    if conf_arg:
         # Using configuration file provided by user
-        confName = confArg
+        conf_name = conf_arg
 
     try:
-        config.read(confName)
-    except ConfigParser.Error as e:
-        print_error(u"Cannot load configuration '{}'\nDetail: {}\n".format(confName, e))
+        config.read(conf_name)
+    except configparser.Error as e:
+        print_error(u"Cannot load configuration '{}'\nDetail: {}\n".format(conf_name, e))
         exit(1)
 
     if CONF_SECTION not in config.sections():
-        if confArg is None:
-            # Default configuration file may be missing if program configuration is up to date
-            if CONF['DEBUG']: print_debug(u'Configuration not found, using default values.')
-            return
+        if conf_arg is None:
+            # Configuration file may be missing if default
+            # configuration is up to date
+            if params['debug']:
+                print_debug(u'Configuration not found, using default values.')
+            return params
         else:
             # User provided configuration is incorrect
-            print_error(u"No [{}] section found in configuration file '{}'.\n".format(CONF_SECTION, confName))
+            print_error(u"No [{}] section found in configuration file '{}'.\n".format(
+                CONF_SECTION, conf_name))
             exit(1)
 
     # All items found in configuration file
-    confItems = dict(config.items(CONF_SECTION)).keys()
+    conf_items = dict(config.items(CONF_SECTION)).keys()
 
     try:
-        if 'DEBUG'.lower() in confItems: CONF['DEBUG'] = config.getint(CONF_SECTION, 'DEBUG')
-        if 'ZABBIX_URL'.lower() in confItems: CONF['ZABBIX_URL'] = config.get(CONF_SECTION, 'ZABBIX_URL')
-        if 'ZABBIX_SENDER_PORT'.lower() in confItems: CONF['ZABBIX_SENDER_PORT'] = config.getint(CONF_SECTION, 'ZABBIX_SENDER_PORT')
-        if 'ZABBIX_USER'.lower() in confItems: CONF['ZABBIX_USER'] = config.get(CONF_SECTION, 'ZABBIX_USER')
-        if 'ZABBIX_PASS'.lower() in confItems: CONF['ZABBIX_PASS'] = config.get(CONF_SECTION, 'ZABBIX_PASS')
-        if 'ZABBIX_GROUP_ID'.lower() in confItems: CONF['ZABBIX_GROUP_ID'] = config.get(CONF_SECTION, 'ZABBIX_GROUP_ID')
-        if 'ZABBIX_TRAPPER_TYPE'.lower() in confItems: CONF['ZABBIX_TRAPPER_TYPE'] = config.get(CONF_SECTION, 'ZABBIX_TRAPPER_TYPE')
-        if 'ENVMON_TEMPLATE_ID'.lower() in confItems: CONF['ENVMON_TEMPLATE_ID'] = config.get(CONF_SECTION, 'ENVMON_TEMPLATE_ID')
-        if 'ENVMON_TEMPLATE_NAME'.lower() in confItems: CONF['ENVMON_TEMPLATE_NAME'] = config.get(CONF_SECTION, 'ENVMON_TEMPLATE_NAME')
-        if 'SERVER_URL'.lower() in confItems: CONF['SERVER_URL'] = config.get(CONF_SECTION, 'SERVER_URL')
-        if 'TLS_CERT'.lower() in confItems: CONF['TLS_CERT'] = config.get(CONF_SECTION, 'TLS_CERT')
-        if 'TLS_KEY'.lower() in confItems: CONF['TLS_KEY'] = config.get(CONF_SECTION, 'TLS_KEY')
-        if 'MONITORING_CLIENT_INST'.lower() in confItems: CONF['MONITORING_CLIENT_INST'] = config.get(CONF_SECTION, 'MONITORING_CLIENT_INST')
-        if 'MONITORING_CLIENT_CLASS'.lower() in confItems: CONF['MONITORING_CLIENT_CLASS'] = config.get(CONF_SECTION, 'MONITORING_CLIENT_CLASS')
-        if 'MONITORING_CLIENT_MEMBER'.lower() in confItems: CONF['MONITORING_CLIENT_MEMBER'] = config.get(CONF_SECTION, 'MONITORING_CLIENT_MEMBER')
-        if 'MONITORING_CLIENT_SUBSYSTEM'.lower() in confItems: CONF['MONITORING_CLIENT_SUBSYSTEM'] = config.get(CONF_SECTION, 'MONITORING_CLIENT_SUBSYSTEM')
-        if 'THREAD_COUNT'.lower() in confItems: CONF['THREAD_COUNT'] = config.getint(CONF_SECTION, 'THREAD_COUNT')
-        if 'TIMEOUT'.lower() in confItems: CONF['TIMEOUT'] = config.getfloat(CONF_SECTION, 'TIMEOUT')
-        if 'SERVERS'.lower() in confItems: CONF['SERVERS'] = config.get(CONF_SECTION, 'SERVERS')
+        if 'debug'.lower() in conf_items:
+            params['debug'] = config.getint(CONF_SECTION, 'debug')
+        if 'zabbix_url'.lower() in conf_items:
+            params['zabbix_url'] = config.get(CONF_SECTION, 'zabbix_url')
+        if 'zabbix_sender_port'.lower() in conf_items:
+            params['zabbix_sender_port'] = config.getint(CONF_SECTION, 'zabbix_sender_port')
+        if 'zabbix_user'.lower() in conf_items:
+            params['zabbix_user'] = config.get(CONF_SECTION, 'zabbix_user')
+        if 'zabbix_pass'.lower() in conf_items:
+            params['zabbix_pass'] = config.get(CONF_SECTION, 'zabbix_pass')
+        if 'zabbix_group_id'.lower() in conf_items:
+            params['zabbix_group_id'] = config.get(CONF_SECTION, 'zabbix_group_id')
+        if 'zabbix_trapper_type'.lower() in conf_items:
+            params['zabbix_trapper_type'] = config.get(CONF_SECTION, 'zabbix_trapper_type')
+        if 'envmon_template_id'.lower() in conf_items:
+            params['envmon_template_id'] = config.get(CONF_SECTION, 'envmon_template_id')
+        if 'envmon_template_name'.lower() in conf_items:
+            params['envmon_template_name'] = config.get(CONF_SECTION, 'envmon_template_name')
+        if 'server_url'.lower() in conf_items:
+            params['server_url'] = config.get(CONF_SECTION, 'server_url')
+        if 'tls_cert'.lower() in conf_items:
+            params['tls_cert'] = config.get(CONF_SECTION, 'tls_cert')
+        if 'tls_key'.lower() in conf_items:
+            params['tls_key'] = config.get(CONF_SECTION, 'tls_key')
+        if 'monitoring_client_inst'.lower() in conf_items:
+            params['monitoring_client_inst'] = config.get(
+                CONF_SECTION, 'monitoring_client_inst')
+        if 'monitoring_client_class'.lower() in conf_items:
+            params['monitoring_client_class'] = config.get(CONF_SECTION, 'monitoring_client_class')
+        if 'monitoring_client_member'.lower() in conf_items:
+            params['monitoring_client_member'] = config.get(
+                CONF_SECTION, 'monitoring_client_member')
+        if 'monitoring_client_subsystem'.lower() in conf_items:
+            params['monitoring_client_subsystem'] = config.get(
+                CONF_SECTION, 'monitoring_client_subsystem')
+        if 'thread_count'.lower() in conf_items:
+            params['thread_count'] = config.getint(CONF_SECTION, 'thread_count')
+        if 'timeout'.lower() in conf_items:
+            params['timeout'] = config.getfloat(CONF_SECTION, 'timeout')
+        if 'servers'.lower() in conf_items:
+            params['servers'] = config.get(CONF_SECTION, 'servers')
     except ValueError as e:
-        print_error(u"Incorrect value found in configuration file '{}'.\nDetail: {}\n".format(confName, e))
+        print_error(u"Incorrect value found in configuration file '{}'.\nDetail: {}\n".format(
+            conf_name, e))
         exit(1)
 
-    if CONF['DEBUG']: print_debug(u"Configuration loaded from '{}'.".format(confName))
+    if params['debug']:
+        print_debug(u"Configuration loaded from '{}'.".format(conf_name))
 
-def getTemplateName(templateId):
+    return params
+
+
+def get_template_name(params, template_id):
     """Query Template name from Zabbix."""
     try:
-        template = zapi.template.get(
-            templateids = templateId,
-            output = ['templateid', 'host'],
+        template = params['zapi'].template.get(
+            templateids=template_id,
+            output=['templateid', 'host'],
         )
         if not template:
             return None
         return template[0]['host']
     except Exception as e:
-        if CONF['DEBUG'] > 1: print_debug(u"getTemplateName: {}".format(e))
+        if params['debug'] > 1:
+            print_debug(u"get_template_name: {}".format(e))
         return None
 
-def checkTemplate(hostId, parentTemplates):
-    """Check if EnvMon Template is added to Host and add the Host if neccessary.""" 
-    parentTemplateIds = [item['templateid'] for item in parentTemplates]
-    if CONF['ENVMON_TEMPLATE_ID'] not in parentTemplateIds:
+
+def check_template(params, host_id, parent_templates):
+    """Check if EnvMon Template is added to Host and add the Host if
+    necessary.
+    """
+    parent_template_ids = [item['templateid'] for item in parent_templates]
+    if params['envmon_template_id'] not in parent_template_ids:
         # Add template to host
-        if CONF['DEBUG']: print_debug(u"Adding EnvMon Template to HostId '{}' to Zabbix.".format(hostId))
+        if params['debug']:
+            print_debug(u"Adding EnvMon Template to HostId '{}' to Zabbix.".format(host_id))
         try:
-            result = zapi.host.update(
-                hostid = hostId,
-                templates = [
+            result = params['zapi'].host.update(
+                hostid=host_id,
+                templates=[
                     {
-                        'templateid': CONF['ENVMON_TEMPLATE_ID']
+                        'templateid': params['envmon_template_id']
                     }
                 ],
             )
-            if not result['hostids'][0] == hostId:
+            if not result['hostids'][0] == host_id:
                 return None
         except Exception as e:
-            if CONF['DEBUG'] > 1: print_debug(u"checkTemplate: {}".format(e))
+            if params['debug'] > 1:
+                print_debug(u"check_template: {}".format(e))
             return None
     return True
 
-def getHost(hostName):
+
+def get_host(params, host_name):
     """Query Host data from Zabbix."""
     try:
-        host = zapi.host.get(
-            filter = {'host': [hostName]},
-            output = ['hostid', 'host', 'name', 'status'],
-            selectItems = ['key_'],
-            selectParentTemplates = ['templateid'],
-            selectApplications = ['name', 'applicationid'],
+        host = params['zapi'].host.get(
+            filter={'host': [host_name]},
+            output=['hostid', 'host', 'name', 'status'],
+            selectItems=['key_'],
+            selectParentTemplates=['templateid'],
+            selectApplications=['name', 'applicationid'],
         )
         if not host:
             return None
         return host[0]
     except Exception as e:
-        if CONF['DEBUG'] > 1: print_debug(u"getHost: {}".format(e))
+        if params['debug'] > 1:
+            print_debug(u"get_host: {}".format(e))
         return None
 
-def addHost(hostName, hostVisibleName):
+
+def add_host(params, host_name, host_visible_name):
     """Add Host to Zabbix."""
     try:
-        result = zapi.host.create(
-            host = hostName,
-            name = hostVisibleName,
-            description = hostVisibleName,
-            interfaces = [
+        result = params['zapi'].host.create(
+            host=host_name,
+            name=host_visible_name,
+            description=host_visible_name,
+            interfaces=[
                 {
                     'type': 1,
                     'main': 1,
@@ -397,373 +433,470 @@ def addHost(hostName, hostVisibleName):
                     'port': '10050'
                 }
             ],
-            groups = [
+            groups=[
                 {
-                    'groupid': CONF['ZABBIX_GROUP_ID']
+                    'groupid': params['zabbix_group_id']
                 }
             ],
-            templates = [
+            templates=[
                 {
-                    'templateid': CONF['ENVMON_TEMPLATE_ID']
+                    'templateid': params['envmon_template_id']
                 }
-            ] if ENVMON else []
+            ] if params['envmon'] else []
         )
         return result['hostids'][0]
     except Exception as e:
-        if CONF['DEBUG'] > 1: print_debug(u"addHost: {}".format(e))
+        if params['debug'] > 1:
+            print_debug(u"add_host: {}".format(e))
         return None
 
-def checkHost(hostName, hostVisibleName):
-    """Check if Host is added to Zabbix and add the Host if neccessary."""
-    hostData = getHost(hostName)
-    if hostData is None:
-        if CONF['DEBUG']: print_debug(u"Adding Host '{}' to Zabbix.".format(hostName))
-        if addHost(hostName, hostVisibleName):
-            hostData = getHost(hostName)
-    return hostData
 
-def addApp(hostId, app):
+def check_host(params, host_name, host_visible_name):
+    """Check if Host is added to Zabbix and add the Host if
+    necessary.
+    """
+    host_data = get_host(params, host_name)
+    if host_data is None:
+        if params['debug']:
+            print_debug(u"Adding Host '{}' to Zabbix.".format(host_name))
+        if add_host(params, host_name, host_visible_name):
+            host_data = get_host(params, host_name)
+    return host_data
+
+
+def add_app(params, host_id, app):
     """Add Application to Zabbix."""
     try:
-        result = zapi.application.create(
-            hostid = hostId,
-            name = app,
+        result = params['zapi'].application.create(
+            hostid=host_id,
+            name=app,
         )
         return result['applicationids']
     except Exception as e:
-        if CONF['DEBUG'] > 1: print_debug(u"addApp: {}".format(e))
+        if params['debug'] > 1:
+            print_debug(u"add_app: {}".format(e))
         return None
 
-def checkApp(hostId, hostApps, app):
-    """Check if Application is already added to the host, and add that application if neccessary.
-       Return updated dict hostApps.
-    """
-    if app not in hostApps.keys():
-        if CONF['DEBUG']: print_debug(u"Adding Application: '{}' for hostId '{}'.".format(app, hostId))
-        result = addApp(hostId, app)
-        try:
-            hostApps[app] = result[0]
-        except Exception as e:
-            if CONF['DEBUG'] > 1: print_debug(u"addHostApp: {}".format(e))
-            return None
-    return hostApps
 
-def addItem(hostId, item, app):
+def check_app(params, host_id, host_apps, app):
+    """Check if Application is already added to the host, and add that
+    application if necessary.
+    Return updated dict host_apps.
+    """
+    if app not in host_apps.keys():
+        if params['debug']:
+            print_debug(u"Adding Application: '{}' for host_id '{}'.".format(app, host_id))
+        result = add_app(params, host_id, app)
+        try:
+            host_apps[app] = result[0]
+        except Exception as e:
+            if params['debug'] > 1:
+                print_debug(u"addHostApp: {}".format(e))
+            return None
+    return host_apps
+
+
+def add_item(params, host_id, item, app):
     """Add Item to Zabbix."""
     try:
         apps = []
         if app:
             apps = [app]
-        result = zapi.item.create(
-            hostid = hostId,
-            name = item['name'] if 'name' in item else item['key'],
-            key_ = item['key'],
-            type = CONF['ZABBIX_TRAPPER_TYPE'],
-            value_type = item['type'],
-            units = item['units'],
-            history = item['history'],
-            description = item['description'],
-            applications = apps,
+        result = params['zapi'].item.create(
+            hostid=host_id,
+            name=item['name'] if 'name' in item else item['key'],
+            key_=item['key'],
+            type=params['zabbix_trapper_type'],
+            value_type=item['type'],
+            units=item['units'],
+            history=item['history'],
+            description=item['description'],
+            applications=apps,
         )
         return result['itemids']
     except Exception as e:
-        if CONF['DEBUG'] > 1: print_debug(u"addItem: {}".format(e))
+        if params['debug'] > 1:
+            print_debug(u"add_item: {}".format(e))
         return None
 
-def checkServerItems(hostId, hostItems):
-    """Check if Server Items are already added to the Host, and adds missing Items."""
+
+def check_server_items(params, host_id, host_items):
+    """Check if Server Items are already added to the Host, and adds
+    missing Items.
+    """
     for item in SERVER_HEALTH_ITEMS:
-        if item['key'] not in hostItems:
-            if CONF['DEBUG']: print_debug(u"Adding item: '{}' for hostId '{}'.".format(item['key'], hostId))
-            if addItem(hostId, item, None) is None:
+        if item['key'] not in host_items:
+            if params['debug']:
+                print_debug(u"Adding item: '{}' for host_id '{}'.".format(item['key'], host_id))
+            if add_item(params, host_id, item, None) is None:
                 return None
     return True
 
-def checkServiceItems(hostId, hostItems, serviceName, serviceKey, appId):
-    """Check if Service Items are already added to the Host, and adds missing Items."""
-    for constItem in SERVICE_HEALTH_ITEMS:
-        item=constItem.copy()
-        item['name'] = u"{}[{}]".format(serviceName, item['key'])
-        item['key'] = u"{}[{}]".format(serviceKey, item['key'])
-        if item['key'] not in hostItems:
-            if CONF['DEBUG']: print_debug(u"Adding item: '{}' for hostId '{}'.".format(item['key'], hostId))
-            if addItem(hostId, item, appId) is None:
+
+def check_service_items(params, host_id, host_items, service_name, service_key, app_id):
+    """Check if Service Items are already added to the Host, and adds
+    missing Items.
+    """
+    for const_item in SERVICE_HEALTH_ITEMS:
+        item = const_item.copy()
+        item['name'] = u"{}[{}]".format(service_name, item['key'])
+        item['key'] = u"{}[{}]".format(service_key, item['key'])
+        if item['key'] not in host_items:
+            if params['debug']:
+                print_debug(u"Adding item: '{}' for host_id '{}'.".format(item['key'], host_id))
+            if add_item(params, host_id, item, app_id) is None:
                 return None
     return True
 
-def getServiceName(service):
+
+def get_service_name(service):
     """Get service name from XML element."""
     elem = service.find('./id:xRoadInstance', NS)
-    xRoadInstance = elem.text if elem is not None else ''
+    x_road_instance = elem.text if elem is not None else ''
     elem = service.find('./id:memberClass', NS)
-    memberClass = elem.text if elem is not None else ''
+    member_class = elem.text if elem is not None else ''
     elem = service.find('./id:memberCode', NS)
-    memberCode = elem.text if elem is not None else ''
+    member_code = elem.text if elem is not None else ''
     elem = service.find('./id:subsystemCode', NS)
-    subsystemCode = elem.text if elem is not None else ''
+    subsystem_code = elem.text if elem is not None else ''
     elem = service.find('./id:serviceCode', NS)
-    serviceCode = elem.text if elem is not None else ''
+    service_code = elem.text if elem is not None else ''
     elem = service.find('./id:serviceVersion', NS)
-    serviceVersion = elem.text if elem is not None else ''
-    return u"{}/{}/{}/{}/{}/{}".format(xRoadInstance, memberClass, memberCode, subsystemCode, serviceCode, serviceVersion)
+    service_version = elem.text if elem is not None else ''
+    return u"{}/{}/{}/{}/{}/{}".format(
+        x_road_instance, member_class, member_code, subsystem_code, service_code, service_version)
 
-def getMetric(node, server):
+
+def get_metric(params, node, server):
     """Convert XML metric to ZabbixMetric.
        Return Zabbix packet elements.
     """
     p = []
     nsp = '{' + NS['m'] + '}'
 
-    if node.tag == nsp+'stringMetric' or node.tag == nsp+'numericMetric':
+    if node.tag == nsp + 'stringMetric' or node.tag == nsp + 'numericMetric':
         try:
             name = node.find('./m:name', NS).text
-            # Some names may have '/' character which is forbiden by zabbix
-            name=name.replace('/', '')
+            # Some names may have '/' character which is forbidden by
+            # zabbix
+            name = name.replace('/', '')
             p.append(ZabbixMetric(server, name, node.find('./m:value', NS).text))
             return p
         except AttributeError:
-            if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
+            if params['debug'] > 1:
+                print_debug(u"get_metric: Incorrect node: {}".format(ElementTree.tostring(node)))
             return None
-    elif node.tag == nsp+'histogramMetric':
+    elif node.tag == nsp + 'histogramMetric':
         try:
             name = node.find('./m:name', NS).text
-            p.append(ZabbixMetric(server, name+'_updated', node.find('./m:updated', NS).text))
-            p.append(ZabbixMetric(server, name+'_min', node.find('./m:min', NS).text))
-            p.append(ZabbixMetric(server, name+'_max', node.find('./m:max', NS).text))
-            p.append(ZabbixMetric(server, name+'_mean', node.find('./m:mean', NS).text))
-            p.append(ZabbixMetric(server, name+'_median', node.find('./m:median', NS).text))
-            p.append(ZabbixMetric(server, name+'_stddev', node.find('./m:stddev', NS).text))
+            p.append(ZabbixMetric(server, name + '_updated', node.find('./m:updated', NS).text))
+            p.append(ZabbixMetric(server, name + '_min', node.find('./m:min', NS).text))
+            p.append(ZabbixMetric(server, name + '_max', node.find('./m:max', NS).text))
+            p.append(ZabbixMetric(server, name + '_mean', node.find('./m:mean', NS).text))
+            p.append(ZabbixMetric(server, name + '_median', node.find('./m:median', NS).text))
+            p.append(ZabbixMetric(server, name + '_stddev', node.find('./m:stddev', NS).text))
             return p
         except AttributeError:
-            if CONF['DEBUG'] > 1: print_debug(u"getMetric: Incorect node: {}".format(ET.tostring(node)))
+            if params['debug'] > 1:
+                print_debug(u"get_metric: Incorrect node: {}".format(ElementTree.tostring(node)))
             return None
     else:
         return None
 
-def getXRoadPackages(node, server):
-    """Convert XML Packages metric to ZabbixMetric (includes only X-Road packages)
-       Return Zabbix packet elements.
+
+def get_x_road_packages(params, node, server):
+    """Convert XML Packages metric to ZabbixMetric (includes only X-Road
+    packages)
+    Return Zabbix packet elements.
     """
-    p=[]
+    p = []
 
     try:
         name = node.find('./m:name', NS).text
         data = ''
         for pack in node.findall('./m:stringMetric', NS):
-            packname = pack.find('./m:name', NS).text
-            if 'xroad' in packname or 'xtee' in packname:
-                data += u"{}: {}\n".format(packname, pack.find('./m:value', NS).text)
+            package_name = pack.find('./m:name', NS).text
+            if 'xroad' in package_name or 'xtee' in package_name:
+                data += u"{}: {}\n".format(package_name, pack.find('./m:value', NS).text)
         p.append(ZabbixMetric(server, name, data))
         return p
     except AttributeError:
-        if CONF['DEBUG'] > 1: print_debug(u"getXRoadPackages: Incorect node: {}".format(ET.tostring(node)))
+        if params['debug'] > 1:
+            print_debug(u"get_x_road_packages: Incorrect node: {}".format(
+                ElementTree.tostring(node)))
         return None
 
-def hostMon(serverData):
-    """Query Host monitoring data (Health or EnvMon) and save to Zabbix."""
-    # Examples of serverData:
-    # XTEE-CI-XM/GOV/00000000/00000000_1/xtee8.ci.kit
-    # XTEE-CI-XM/GOV/00000001/00000001_1/xtee9.ci.kit
-    # XTEE-CI-XM/COM/00000002/00000002_1/xtee10.ci.kit
-    # Server name part is "greedy" match to allow server names to have "/" character
-    m = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', serverData)
+
+def host_mon(params, server_data):
+    """Query Host monitoring data (Health or EnvMon) and save to Zabbix.
+    """
+    # Examples of server_data:
+    # INST/GOV/00000000/00000000_1/xrd0.ss.dns
+    # INST/GOV/00000001/00000001_1/xrd1.ss.dns
+    # INST/COM/00000002/00000002_1/xrd2.ss.dns
+    # Server name part is "greedy" match to allow server names to have
+    # "/" character
+    m = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', server_data)
 
     if m is None or m.lastindex != 5:
-        print_error(u"Incorrect server string '{}'!\n".format(serverData))
+        print_error(u"Incorrect server string '{}'!\n".format(server_data))
         return
 
-    hostVisibleName = m.group(0)
-    hostName = re.sub('[^0-9a-zA-Z\.-]+', '.', hostVisibleName)
+    host_visible_name = m.group(0)
+    host_name = re.sub('[^0-9a-zA-Z-]+', '.', host_visible_name)
 
-    if CONF['DEBUG']: print_debug(u"Processing Host '{}'.".format(hostName))
+    if params['debug']:
+        print_debug(u"Processing Host '{}'.".format(host_name))
 
-    # Check if Host is added to Zabbix and adds the Host if neccessary
-    hostData = checkHost(hostName, hostVisibleName)
-    if hostData is None:
-        print_error(u"Cannot add Host '{}' to Zabbix!\n".format(hostName))
+    # Check if Host is added to Zabbix and adds the Host if necessary
+    host_data = check_host(params, host_name, host_visible_name)
+    if host_data is None:
+        print_error(u"Cannot add Host '{}' to Zabbix!\n".format(host_name))
         return
 
     # Check if Host is disabled (status == 1)
-    if hostData['status'] == 1:
-        print_error(u"Host '{}' is disabled.\n".format(hostName))
+    if host_data['status'] == 1:
+        print_error(u"Host '{}' is disabled.\n".format(host_name))
         return
 
-    hostApps = {}
+    host_apps = {}
     # Getting dict of Applications already added to Host
-    for item in hostData['applications']:
-        hostApps[item['name']] = item['applicationid']
+    for item in host_data['applications']:
+        host_apps[item['name']] = item['applicationid']
 
     # Getting list of Items already added to Host
-    hostItems=[item['key_'] for item in hostData['items']]
+    host_items = [item['key_'] for item in host_data['items']]
 
-    if ENVMON:
+    if params['envmon']:
         # Check if Host has envmon template in "parentTemplates"
-        if checkTemplate(hostData['hostid'], hostData['parentTemplates']) is None:
-            print_error(u"Cannot add EnvMon Template to Host '{}'!\n".format(hostName))
+        if check_template(params, host_data['hostid'], host_data['parentTemplates']) is None:
+            print_error(u"Cannot add EnvMon Template to Host '{}'!\n".format(host_name))
             return
     else:
         # Adding missing Server Items
-        if checkServerItems(hostData['hostid'], hostItems) is None:
-            print_error(u"Cannot add some of the Items for Host '{}'!\n".format(hostName))
+        if check_server_items(params, host_data['hostid'], host_items) is None:
+            print_error(u"Cannot add some of the Items for Host '{}'!\n".format(host_name))
             return
 
     # Request body
-    if CONF['MONITORING_CLIENT_SUBSYSTEM']:
-        body_template = ENVMON_REQUEST_TEMPLATE if ENVMON else HEALTH_REQUEST_TEMPLATE
+    if params['monitoring_client_subsystem']:
+        body_template = ENVMON_REQUEST_TEMPLATE if params['envmon'] else HEALTH_REQUEST_TEMPLATE
     else:
-        body_template = ENVMON_REQUEST_MEMBER_TEMPLATE if ENVMON else HEALTH_REQUEST_MEMBER_TEMPLATE
+        body_template = ENVMON_REQUEST_MEMBER_TEMPLATE if params['envmon'] else \
+            HEALTH_REQUEST_MEMBER_TEMPLATE
     body = body_template.format(
-        monitorInst = CONF['MONITORING_CLIENT_INST'], monitorClass = CONF['MONITORING_CLIENT_CLASS'],
-        monitorMember = CONF['MONITORING_CLIENT_MEMBER'], monitorSubsystem = CONF['MONITORING_CLIENT_SUBSYSTEM'],
-        inst = m.group(1), memberClass = m.group(2), member = m.group(3), server = m.group(4), uuid = uuid.uuid4(),
+        monitor_instance=params['monitoring_client_inst'],
+        monitor_class=params['monitoring_client_class'],
+        monitor_member=params['monitoring_client_member'],
+        monitor_subsystem=params['monitoring_client_subsystem'], instance=m.group(1),
+        member_class=m.group(2), member_code=m.group(3), server_code=m.group(4), uuid=uuid.uuid4()
     )
 
     cert = None
-    if CONF['TLS_CERT'] and CONF['TLS_KEY']:
-        cert = (CONF['TLS_CERT'], CONF['TLS_KEY'])
+    if params['tls_cert'] and params['tls_key']:
+        cert = (params['tls_cert'], params['tls_key'])
 
     headers = {'Content-type': 'text/xml;charset=UTF-8'}
 
     try:
-        response = requests.post(CONF['SERVER_URL'], data=body, headers=headers, timeout=CONF['TIMEOUT'], verify=False, cert=cert)
+        response = requests.post(
+            params['server_url'], data=body, headers=headers, timeout=params['timeout'],
+            verify=False, cert=cert)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print_error(u"Cannot get response for '{}' ({}: {})!\n".format(hostVisibleName, type(e).__name__, e))
+        print_error(
+            u"Cannot get response for '{}' ({}: {})!\n".format(
+                host_visible_name, type(e).__name__, e))
         return
 
     try:
         # Skipping multipart headers
-        envel = re.search('<SOAP-ENV:Envelope.+<\/SOAP-ENV:Envelope>', response.text, re.DOTALL)
-        root = ET.fromstring(envel.group(0).encode('utf-8'))    # ET.fromstring wants encoded bytes as input (PY2)
-        metrics = root.find('.//m:getSecurityServerMetricsResponse/m:metricSet' if ENVMON else './/om:getSecurityServerHealthDataResponse', NS)
+        envel = re.search('<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', response.text, re.DOTALL)
+        root = ElementTree.fromstring(
+            # ElementTree.fromstring wants encoded bytes as input (PY2)
+            envel.group(0).encode('utf-8'))
+        metrics = root.find(
+            './/m:getSecurityServerMetricsResponse/m:metricSet' if params['envmon']
+            else './/om:getSecurityServerHealthDataResponse', NS)
         if metrics is None:
-            raise
-    except Exception:
-        print_error(u"Cannot parse response of '{}'!\n".format(hostVisibleName))
-        if CONF['DEBUG'] > 1: print_debug(u"hostMon -> Response: {}".format(response.content))
+            raise Exception('No data')
+    except Exception as e:
+        print_error(u"Cannot parse response of '{}' ({}: {})!\n".format(
+            host_visible_name, type(e).__name__, e))
+        if params['debug'] > 1:
+            print_debug(u"host_mon -> Response: {}".format(response.content))
         return
 
     # Packet of Zabbix metrics
     packet = []
 
-    if ENVMON:
+    if params['envmon']:
         # Host metrics
         for item in ENVMON_METRICS:
-            metric = getMetric(metrics.find(".//m:{}[m:name='{}']".format(item['type'], item['name']), NS), hostName)
+            metric = get_metric(
+                params,
+                metrics.find(".//m:{}[m:name='{}']".format(item['type'], item['name']), NS),
+                host_name)
             if metric is not None:
                 packet += metric
             else:
-                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(item['name'], hostName))
-    
-        # It might not be a good idea to store full Package list in zabbix.
-        # As a compromise we filter only xroad packages.
-        metric = getXRoadPackages(metrics.find(".//m:metricSet[m:name='Packages']", NS), hostName)
+                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(
+                    item['name'], host_name))
+
+        # It might not be a good idea to store full Package list in
+        # zabbix.
+        # As a compromise we filter only X-Road packages.
+        metric = get_x_road_packages(
+            params, metrics.find(".//m:metricSet[m:name='Packages']", NS), host_name)
         if metric is not None:
             packet += metric
         else:
-            print_error(u"MetricSet 'Packages' for Host '{}' is not available!\n".format(hostName))
+            print_error(u"MetricSet 'Packages' for Host '{}' is not available!\n".format(
+                host_name))
     else:
         # Host metrics
         for item in SERVER_HEALTH_ITEMS:
-            metricPath = './om:{}'.format(item['key'])
-            metricKey = item['key']
+            metric_path = './om:{}'.format(item['key'])
+            metric_key = item['key']
             try:
-                packet.append(ZabbixMetric(hostName, metricKey, metrics.find(metricPath, NS).text))
+                packet.append(ZabbixMetric(host_name, metric_key, metrics.find(
+                    metric_path, NS).text))
             except AttributeError:
-                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(metricKey, hostName))
-    
-        for serviceEvents in metrics.findall('om:servicesEvents/om:serviceEvents', NS):
-            serviceName = getServiceName(serviceEvents.find('./om:service', NS))
-            serviceKey = re.sub('[^0-9a-zA-Z\.-]+', '.', serviceName)
-    
+                print_error(
+                    u"Metric '{}' for Host '{}' is not available!\n".format(metric_key, host_name))
+
+        for service_events in metrics.findall('om:servicesEvents/om:serviceEvents', NS):
+            service_name = get_service_name(service_events.find('./om:service', NS))
+            service_key = re.sub('[^0-9a-zA-Z-]+', '.', service_name)
+
             # Check if Application is added
-            hostApps = checkApp(hostData['hostid'], hostApps, serviceName)
-            if hostApps is None:
-                print_error(u"Cannot add Application '{}' to Host '{}'!\n".format(serviceName, hostName))
+            host_apps = check_app(params, host_data['hostid'], host_apps, service_name)
+            if host_apps is None:
+                print_error(
+                    u"Cannot add Application '{}' to Host '{}'!\n".format(service_name, host_name))
                 return
-    
+
             # Check if Service Items are added
-            if checkServiceItems(hostData['hostid'], hostItems, serviceName, serviceKey, hostApps[serviceName]) is None:
-                print_error(u"Cannot add some of the service '{}' Items to Host '{}'!\n".format(serviceName, hostName))
+            if check_service_items(
+                    params, host_data['hostid'], host_items, service_name, service_key,
+                    host_apps[service_name]) is None:
+                print_error(u"Cannot add some of the service '{}' Items to Host '{}'!\n".format(
+                    service_name, host_name))
                 return
-    
+
             # Service metrics
             for item in SERVICE_HEALTH_ITEMS:
-                metricPath = ".//om:{}".format(item['key'])
-                metricKey = "{}[{}]".format(serviceKey, item['key'])
+                metric_path = ".//om:{}".format(item['key'])
+                metric_key = "{}[{}]".format(service_key, item['key'])
                 try:
-                    packet.append(ZabbixMetric(hostName, metricKey, serviceEvents.find(metricPath, NS).text))
+                    packet.append(ZabbixMetric(host_name, metric_key, service_events.find(
+                        metric_path, NS).text))
                 except AttributeError:
-                    None
+                    pass
 
     # Pushing metrics to zabbix
-    sender = ZabbixSender(zabbix_server=urlparse.urlsplit(CONF['ZABBIX_URL']).hostname, zabbix_port=CONF['ZABBIX_SENDER_PORT'])
+    sender = ZabbixSender(zabbix_server=urlparse.urlsplit(params['zabbix_url']).hostname,
+                          zabbix_port=params['zabbix_sender_port'])
     try:
-        if CONF['DEBUG']: print_debug(u"Saving Health metrics for Host '{}'.".format(hostName))
+        if params['debug']:
+            print_debug(u"Saving Health metrics for Host '{}'.".format(host_name))
         sender.send(packet)
     except Exception as e:
-        print_error(u"Cannot save Health metrics for Host '{}'!\n{}\n".format(hostName, e))
+        print_error(u"Cannot save Health metrics for Host '{}'!\n{}\n".format(host_name, e))
 
-def worker():
+
+def worker(params):
     while True:
-        item = workQueue.get()
+        # Checking periodically if it is the time to gracefully shutdown
+        # the worker.
+        try:
+            item = params['work_queue'].get(True, 0.1)
+        except queue.Empty:
+            if params['shutdown'].is_set():
+                return
+            else:
+                continue
         try:
             # Calling main processing function
-            hostMon(item)
+            host_mon(params, item)
         except Exception as e:
             print_error(u"Unexpected error: {}: {}\n".format(type(e).__name__, e))
         finally:
-            workQueue.task_done()
+            params['work_queue'].task_done()
 
 
-# Main programm
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='X-Road Health and Environment monitoring collector for Zabbix.')
+def main():
+    parser = argparse.ArgumentParser(
+        description='X-Road Health and Environment monitoring collector for Zabbix.')
     parser.add_argument('-c', '--config', help='Configuration file location')
-    parser.add_argument('--env', action='store_true', help='Collect Environment data instead of Health data')
+    parser.add_argument(
+        '--env', action='store_true', help='Collect Environment data instead of Health data')
     args = parser.parse_args()
 
-    loadConf(args.config)
+    params = load_conf(args.config)
 
     if args.env:
         # Starting EnvMon instead on Health data collection
-        ENVMON = True
+        params['envmon'] = True
 
-    if ENVMON:
-        if CONF['DEBUG']: print_debug(u'Collecting Envinronmental Monitoring.')
+    if params['envmon']:
+        if params['debug']:
+            print_debug(u'Collecting Environmental Monitoring.')
     else:
-        if CONF['DEBUG']: print_debug(u'Collecting Health Monitoring.')
+        if params['debug']:
+            print_debug(u'Collecting Health Monitoring.')
 
     # Create ZabbixAPI class instance
-    try: 
-        zapi = ZabbixAPI(url = CONF['ZABBIX_URL'], user = CONF['ZABBIX_USER'], password = CONF['ZABBIX_PASS'])
+    try:
+        params['zapi'] = ZabbixAPI(
+            url=params['zabbix_url'], user=params['zabbix_user'], password=params['zabbix_pass'])
     except Exception as e:
-        print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}\n".format(CONF['ZABBIX_URL'], e))
+        print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}\n".format(
+            params['zabbix_url'], e))
         exit(1)
 
     # Check if EnvMon Template exists
-    if ENVMON and not getTemplateName(CONF['ENVMON_TEMPLATE_ID']) == CONF['ENVMON_TEMPLATE_NAME']:
-        print_error(u"EnvMon Template (id='{}', name='{}') not found in Zabbix!\n".format(CONF['ENVMON_TEMPLATE_ID'], CONF['ENVMON_TEMPLATE_NAME']))
+    if params['envmon'] and not get_template_name(
+            params, params['envmon_template_id']) == params['envmon_template_name']:
+        print_error(u"EnvMon Template (id='{}', name='{}') not found in Zabbix!\n".format(
+            params['envmon_template_id'], params['envmon_template_name']))
         exit(1)
 
     # Working queue (list of servers to load the data from)
-    workQueue = Queue.Queue()
-    for i in range(CONF['THREAD_COUNT']):
-        t = threading.Thread(target=worker)
+    params['work_queue'] = queue.Queue()
+
+    # Event used to signal threads to shut down.
+    params['shutdown'] = threading.Event()
+
+    # Create and start new threads
+    threads = []
+    for i in range(params['thread_count']):
+        t = threading.Thread(target=worker, args=(params,))
         t.daemon = True
         t.start()
+        threads.append(t)
 
     # Populate the queue
-    if CONF['SERVERS']:
+    if params['servers']:
         # Using list of servers from configuration file
-        for line in CONF['SERVERS'].splitlines():
-            workQueue.put(line)
+        for line in params['servers'].splitlines():
+            params['work_queue'].put(line)
     else:
-        # Fill workqueue with stdin values
+        # Fill work_queue with stdin values
         for line in sys.stdin:
-            workQueue.put(line)
+            params['work_queue'].put(line)
 
-    # block until all tasks are done
-    workQueue.join()
+    # Block until all tasks are done
+    params['work_queue'].join()
 
-    if CONF['DEBUG']: print_debug(u'Main programm: Exiting.')
+    # Set shutdown event and wait until all daemon processes finish
+    params['shutdown'].set()
+    for t in threads:
+        t.join()
+
+    if params['debug']:
+        print_debug(u'Main program: Exiting.')
+
+
+if __name__ == '__main__':
+    main()

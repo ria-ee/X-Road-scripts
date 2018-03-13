@@ -1,39 +1,42 @@
 # An example for collecting data from local Security Server.
-# Note that Collection of Environmental monitoring is allowed only for central monitoring client and owner of Security Server.
-# Leave MONITORING_CLIENT_SUBSYSTEM empty and use the correct MEMBER identifier of the owner of local Security Server
-# to collect Environmental monitoring data from that Server.
+# Note that Collection of Environmental monitoring is allowed only for
+# central monitoring client and owner of Security Server.
+# Leave MONITORING_CLIENT_SUBSYSTEM empty and use the correct MEMBER
+# identifier of the owner of local Security Server to collect
+# Environmental monitoring data from that Server.
 
 [metrics]
 # Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
-DEBUG = 1
+debug = 1
 
 # Zabbix configuration
-ZABBIX_URL = https://myzabbix.server/
-ZABBIX_USER = ZABBIX_USER
-ZABBIX_PASS = ZABBIX_PASS
+zabbix_url = https://myzabbix.server/
+zabbix_user = ZABBIX_USER
+zabbix_pass = ZABBIX_PASS
 
 # EnvMon template configuration
-ENVMON_TEMPLATE_ID = 10242
-ENVMON_TEMPLATE_NAME = X-Road Environmental monitoring
+envmon_template_id = 10242
+envmon_template_name = X-Road Environmental monitoring
 
 # Security server URL used by Central monitoring:
-SERVER_URL = https://xtee15.ci.kit
+server_url = https://xrd1.ss.dns
 
-# Path to TLS certificate and key in case when Security Server requires TLS authentication
-TLS_CERT = certs/my.crt
-TLS_KEY = certs/my.key
+# Path to TLS certificate and key in case when Security Server requires
+# TLS authentication
+tls_cert = certs/my.crt
+tls_key = certs/my.key
 
 # Client subsystem/member that performs health data collection:
-MONITORING_CLIENT_INST = XTEE-CI-CUST
-MONITORING_CLIENT_CLASS = COM
-MONITORING_CLIENT_MEMBER = 00000002
-MONITORING_CLIENT_SUBSYSTEM =
+monitoring_client_inst = INST
+monitoring_client_class = GOV
+monitoring_client_member = 00000001
+monitoring_client_subsystem =
 
 # How many threads to use for data querying.
-THREAD_COUNT = 1
+thread_count = 1
 
 # Timeout for http requests
-TIMEOUT = 15.0
+timeout = 15.0
 
 # List of servers to collect data from
-SERVERS = XTEE-CI-CUST/COM/00000002/00000002_1/xtee15.ci.kit
+servers = INST/GOV/00000001/00000001_1/xrd1.ss.dns
