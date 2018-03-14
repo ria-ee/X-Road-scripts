@@ -11,6 +11,8 @@ import sys
 import threading
 import uuid
 import six
+import time
+import calendar
 import xml.etree.ElementTree as ElementTree
 import six.moves.urllib.parse as urlparse
 from six.moves import queue
@@ -627,6 +629,60 @@ def get_x_road_packages(params, node, server):
         return None
 
 
+def get_certificates(params, node, server):
+    """Convert XML Certificates metric to ZabbixMetric
+    Return Zabbix packet elements.
+    """
+    p = []
+
+    try:
+        name = node.find('./m:name', NS).text
+        data = ''
+        max_not_before = None
+        min_not_after = None
+        for certificate in node.findall('./m:metricSet', NS):
+            sha1_hash = certificate.find(".//m:stringMetric[m:name='sha1Hash']", NS)
+            not_before = certificate.find(".//m:stringMetric[m:name='notBefore']", NS)
+            not_before_value = not_before.find('./m:value', NS).text
+            not_after = certificate.find(".//m:stringMetric[m:name='notAfter']", NS)
+            not_after_value = not_after.find('./m:value', NS).text
+            certificate_type = certificate.find(".//m:stringMetric[m:name='certificateType']", NS)
+            certificate_type_value = certificate_type.find('./m:value', NS).text
+            active = certificate.find(".//m:stringMetric[m:name='active']", NS)
+            active_value = active.find('./m:value', NS).text
+            data += u"sha1Hash: {}\nnotBefore: {}\nnotAfter: {}\ncertificateType: {}\n" \
+                    u"active: {}\n\n".format(
+                        sha1_hash.find('./m:value', NS).text,
+                        not_before_value, not_after_value, certificate_type_value, active_value)
+            # Not checking validity of disabled or client certificates
+            if active_value == 'false' or certificate_type_value == 'INTERNAL_IS_CLIENT_TLS':
+                continue
+            not_before_time = time.strptime(not_before_value, '%Y-%m-%dT%H:%M:%SZ')
+            not_after_time = time.strptime(not_after_value, '%Y-%m-%dT%H:%M:%SZ')
+            if max_not_before is None or max_not_before < not_before_time:
+                max_not_before = not_before_time
+            if min_not_after is None or min_not_after > not_after_time:
+                min_not_after = not_after_time
+
+        # Adding Certificates metric
+        p.append(ZabbixMetric(server, name, data))
+
+        # Adding Certificates_validity metric
+        current_time = time.gmtime()
+        if current_time < max_not_before or current_time > min_not_after:
+            # Some certificate is not yet valid or already expired
+            p.append(ZabbixMetric(server, name + '_validity', '0'))
+        else:
+            p.append(ZabbixMetric(server, name + '_validity', str(
+                calendar.timegm(min_not_after) - calendar.timegm(current_time))))
+        return p
+    except AttributeError:
+        if params['debug'] > 1:
+            print_debug(u"get_x_road_packages: Incorrect node: {}".format(
+                ElementTree.tostring(node)))
+        return None
+
+
 def host_mon(params, server_data):
     """Query Host monitoring data (Health or EnvMon) and save to Zabbix.
     """
@@ -753,6 +809,26 @@ def host_mon(params, server_data):
         else:
             print_error(u"MetricSet 'Packages' for Host '{}' is not available!\n".format(
                 host_name))
+
+        # Finding proxy version
+        proxy_version = metrics.find(".//m:stringMetric[m:name='proxyVersion']", NS)
+        proxy_version_value = proxy_version.find('./m:value', NS).text
+
+        # Certificates metrics are not supported before '6.16.0-1'
+        if proxy_version_value > '6.16.0-1':
+            # Certificates metrics.
+            # Checking validity information of SIGN, AUTH and Security
+            # Server's TLS certificates that are enabled.
+            # INTERNAL_IS_CLIENT_TLS will not influence X-Road
+            # because Security Server does not check for validity of
+            # client TLS certificates.
+            metric = get_certificates(
+                params, metrics.find(".//m:metricSet[m:name='Certificates']", NS), host_name)
+            if metric is not None:
+                packet += metric
+            else:
+                print_error(u"MetricSet 'Certificates' for Host '{}' is not available!\n".format(
+                    host_name))
     else:
         # Host metrics
         for item in SERVER_HEALTH_ITEMS:
