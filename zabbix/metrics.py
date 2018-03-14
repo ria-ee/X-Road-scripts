@@ -183,7 +183,24 @@ ENVMON_REQUEST_TEMPLATE = u"""<SOAP-ENV:Envelope
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
     </SOAP-ENV:Header>
     <SOAP-ENV:Body>
-        <m:getSecurityServerMetrics/>
+        <m:getSecurityServerMetrics>
+            <m:outputSpec>
+                <m:outputField>proxyVersion</m:outputField>
+                <m:outputField>CommittedVirtualMemory</m:outputField>
+                <m:outputField>FreePhysicalMemory</m:outputField>
+                <m:outputField>FreeSwapSpace</m:outputField>
+                <m:outputField>OpenFileDescriptorCount</m:outputField>
+                <m:outputField>SystemCpuLoad</m:outputField>
+                <m:outputField>DiskSpaceFree_/</m:outputField>
+                <m:outputField>DiskSpaceTotal_/</m:outputField>
+                <m:outputField>MaxFileDescriptorCount</m:outputField>
+                <m:outputField>OperatingSystem</m:outputField>
+                <m:outputField>TotalPhysicalMemory</m:outputField>
+                <m:outputField>TotalSwapSpace</m:outputField>
+                <m:outputField>Packages</m:outputField>
+                <m:outputField>Certificates</m:outputField>
+            </m:outputSpec>
+        </m:getSecurityServerMetrics>
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 """
@@ -247,7 +264,24 @@ ENVMON_REQUEST_MEMBER_TEMPLATE = u"""<SOAP-ENV:Envelope
         <xrd:protocolVersion>4.0</xrd:protocolVersion>
     </SOAP-ENV:Header>
     <SOAP-ENV:Body>
-        <m:getSecurityServerMetrics/>
+        <m:getSecurityServerMetrics>
+            <m:outputSpec>
+                <m:outputField>proxyVersion</m:outputField>
+                <m:outputField>CommittedVirtualMemory</m:outputField>
+                <m:outputField>FreePhysicalMemory</m:outputField>
+                <m:outputField>FreeSwapSpace</m:outputField>
+                <m:outputField>OpenFileDescriptorCount</m:outputField>
+                <m:outputField>SystemCpuLoad</m:outputField>
+                <m:outputField>DiskSpaceFree_/</m:outputField>
+                <m:outputField>DiskSpaceTotal_/</m:outputField>
+                <m:outputField>MaxFileDescriptorCount</m:outputField>
+                <m:outputField>OperatingSystem</m:outputField>
+                <m:outputField>TotalPhysicalMemory</m:outputField>
+                <m:outputField>TotalSwapSpace</m:outputField>
+                <m:outputField>Packages</m:outputField>
+                <m:outputField>Certificates</m:outputField>
+            </m:outputSpec>
+        </m:getSecurityServerMetrics>
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 """
