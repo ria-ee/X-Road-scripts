@@ -14,6 +14,7 @@ parser.add_argument('-c', '--config', help='Configuration file location')
 parser.add_argument('--url', help='Zabbix URL')
 parser.add_argument('--user', help='Zabbix user')
 parser.add_argument('--password', help='Zabbix password')
+parser.add_argument('--instance', help='X-Road instance filter')
 parser.add_argument('-s', help='Output only percentage of hosts that were not '
                                'updated in the last S seconds', type=int)
 args = parser.parse_args()
@@ -21,6 +22,7 @@ args = parser.parse_args()
 url = ''
 user = ''
 password = ''
+instance = ''
 if args.config:
     config = configparser.RawConfigParser()
     config.read(args.config)
@@ -31,12 +33,16 @@ if args.config:
         user = config.get('zabbix', 'user')
     if 'password' in conf_items:
         password = config.get('zabbix', 'password')
+    if 'instance' in conf_items:
+        instance = config.get('zabbix', 'instance')
 if args.url:
     url = args.url
 if args.user:
     user = args.user
 if args.password:
     password = args.password
+if args.instance:
+    instance = args.instance
 
 if not url or not user or not password:
     sys.stderr.write('ERROR: Zabbix configuration missing.\n')
@@ -44,15 +50,24 @@ if not url or not user or not password:
 
 zapi = ZabbixAPI(url=url, user=user, password=password)
 
-hosts = zapi.host.get(
-    output=['hostid', 'host'],
-    selectItems=['key_'],
-    filter={'status': '0'}
-)
+hosts = None
+if instance:
+    hosts = zapi.host.get(
+        output=['hostid', 'host'],
+        selectItems=['key_'],
+        filter={'status': '0'},
+        startSearch=True,
+        search={'host': instance + '.'}
+    )
+else:
+    hosts = zapi.host.get(
+        output=['hostid', 'host'],
+        selectItems=['key_'],
+        filter={'status': '0'}
+    )
 
 updated_hosts = 0
 total_hosts = 0
-
 for host in hosts:
     # Checking only hosts that have proxyVersion metric
     if {u'key_': u'proxyVersion'} in host['items']:
