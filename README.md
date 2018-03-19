@@ -136,3 +136,9 @@ response production) for all active and registered certificates. Returns
 [globalconf_expiration.py](misc/globalconf_expiration.py) - Can be
 executed inside Security Server to display expiration times of global
 configuration parts.
+
+[updated_hosts.py](misc/updated_hosts.py) - Can be used to check how
+many hosts in Zabbix were updated recently. Zabbix URL and credentials
+can be passed as command line arguments or via configuration file.
+Example configutration file:
+[updated_hosts.cfg_example](misc/updated_hosts.cfg_example).
