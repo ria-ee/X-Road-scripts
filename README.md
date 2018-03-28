@@ -68,6 +68,30 @@ monitoring collector for Zabbix. Can be used by:
   Server.
 * X-Road members to collect other members Health data.
 
+**NB! Tested with Zabbix 3.0 LTS.**
+
+Known issues with Zabbix 3.4:
+* Adding items fails with:
+  `Incorrect value for field "trapper_hosts": invalid address range ""`
+  
+  Workaround: Insert a line
+  ```
+              trapper_hosts='0.0.0.0/0',
+  ```
+  after [metrics.py#L545](zabbix/metrics.py#L545) (`type=params['zabbix_trapper_type'],`).
+* Adding items fails with:
+  `Incorrect value for field "history": must be between "3600" and "788400000"`
+  
+  Workaround: Change a line
+  ```
+              history=item['history'],
+  ```
+  to:
+  ```
+              history=item['history']+'d',
+  ```
+  in [metrics.py#L548](zabbix/metrics.py#L548).
+
 [zabbix_cron.sh](zabbix/zabbix_cron.sh) - Sample shell script that can
 be executed from crontab to periodically collect the data.
 
@@ -136,3 +160,9 @@ response production) for all active and registered certificates. Returns
 [globalconf_expiration.py](misc/globalconf_expiration.py) - Can be
 executed inside Security Server to display expiration times of global
 configuration parts.
+
+[updated_hosts.py](misc/updated_hosts.py) - Can be used to check how
+many hosts in Zabbix were updated recently. Zabbix URL and credentials
+can be passed as command line arguments or via configuration file.
+Example configutration file:
+[updated_hosts.cfg_example](misc/updated_hosts.cfg_example).

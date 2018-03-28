@@ -1,0 +1,5 @@
+[zabbix]
+url = https://myzabbix.server/
+user = ZABBIX_USER
+password = ZABBIX_PASS
+instance = INST
