@@ -143,10 +143,10 @@ def worker(params):
 
             method_index = {}
             skip_methods = False
-            for method in xrdinfo.methods(
+            for method in sorted(xrdinfo.methods(
                     addr=params['url'], client=params['client'], producer=subsystem,
                     method='listMethods', timeout=params['timeout'], verify=params['verify'],
-                    cert=params['cert']):
+                    cert=params['cert'])):
                 if xrdinfo.stringify(method) in method_index:
                     # Method already found in previous WSDL's
                     continue
