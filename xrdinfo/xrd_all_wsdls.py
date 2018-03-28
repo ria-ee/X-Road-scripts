@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from six.moves.queue import Queue, Empty
+from six.moves import queue
 from threading import Thread, Event, Lock, current_thread
 import argparse
 import hashlib
@@ -22,16 +22,33 @@ DEFAULT_THREAD_COUNT = 1
 METHODS_HTML_TEMPL = u"""<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>All methods with WSDL descriptions</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>All methods with WSDL descriptions</title>
+  <link rel="stylesheet"
+    href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 </head>
 <body>
+<div class="container">
 <h1>All methods with WSDL descriptions</h1>
 <p>Report time: {report_time}</p>
 <p><a href="history.html">History</a></p>
 <p>Latest data in <a href="index.json">JSON</a> form.</p>
 <p>This report in <a href="index_{suffix}.json">JSON</a> form.</p>
-{body}</body>
+<button type="button" class="btn" onClick="$('#accordion .collapse').collapse('show');">
+Expand all subsystems
+</button>
+<button type="button" class="btn" onClick="$('#accordion .collapse').collapse('hide');">
+Collapse all subsystems
+</button>
+<div id="accordion">
+{body}
+</div>
+</div>
+</body>
 </html>
 """
 
@@ -39,11 +56,16 @@ HISTORY_HTML_TEMPL = u"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History</title>
+<link rel="stylesheet"
+  href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 </head>
 <body>
+<div class="container">
 <h1>History</h1>
-{body}</body>
+{body}</div>
+</body>
 </html>
 """
 
@@ -108,7 +130,7 @@ def worker(params):
         # the worker.
         try:
             subsystem = params['work_queue'].get(True, 0.1)
-        except Empty:
+        except queue.Empty:
             if params['shutdown'].is_set():
                 return
             else:
@@ -171,12 +193,22 @@ def worker(params):
                     safe_print(txt)
 
             with params['results_lock']:
-                params['results'].update(method_index)
+                params['results'][wsdl_rel_path] = {
+                    'methods': method_index,
+                    'ok': True}
         except xrdinfo.XrdInfoError as e:
+            with params['results_lock']:
+                params['results'][wsdl_rel_path] = {
+                    'methods': {},
+                    'ok': False}
             if params['verbose']:
                 safe_print(u'{}: {} - ERROR:\n{}\n'.format(
                     current_thread().getName(), xrdinfo.stringify(subsystem), e))
         except Exception as e:
+            with params['results_lock']:
+                params['results'][wsdl_rel_path] = {
+                    'methods': {},
+                    'ok': False}
             safe_print(u'{}: {}: {}\n'.format(current_thread().getName(), type(e).__name__, e))
         finally:
             params['work_queue'].task_done()
@@ -222,7 +254,7 @@ def main():
         'verify': False,
         'cert': None,
         'thread_cnt': DEFAULT_THREAD_COUNT,
-        'work_queue': Queue(),
+        'work_queue': queue.Queue(),
         'results': {},
         'results_lock': Lock(),
         'shutdown': Event()
@@ -300,36 +332,74 @@ def main():
     results = params['results']
 
     body = ''
+    card_nr = 0
     json_data = []
-    for key in sorted(results.keys()):
-        method = key.split('/')
-        json_item = {
-            'xRoadInstance': method[0],
-            'memberClass': method[1],
-            'memberCode': method[2],
-            'subsystemCode': method[3],
-            'serviceCode': method[4],
-            'serviceVersion': method[5],
-        }
-        if results[key] == 'SKIPPED':
-            body = body + u'<p>{} (WSDL skipped due to previous Timeout)</p>\n'.format(
-                key, results[key])
-            json_item['status'] = 'SKIPPED'
-            json_item['wsdl'] = ''
-        elif results[key] == 'TIMEOUT':
-            body = body + u'<p>{} (WSDL query timed out)</p>\n'.format(key, results[key])
-            json_item['status'] = 'TIMEOUT'
-            json_item['wsdl'] = ''
-        elif results[key]:
-            body = body + u'<p>{} (<a href="{}">WSDL</a>)</p>\n'.format(key, results[key])
-            json_item['status'] = 'OK'
-            json_item['wsdl'] = results[key]
+    for subsystem_key in sorted(results.keys()):
+        card_nr += 1
+        subsystem_result = results[subsystem_key]
+        methods = subsystem_result['methods']
+        if subsystem_result['ok'] and len(methods) > 0:
+            subsystem_status = 'ok'
+            subsystem_badge = u''
+        elif subsystem_result['ok']:
+            subsystem_status = 'empty'
+            subsystem_badge = u' <span class="badge badge-secondary">Empty</span>'
         else:
-            body = body + u'<p>{} (Error while downloading or parsing of WSDL)</p>\n'.format(
-                key, results[key])
-            json_item['status'] = 'ERROR'
-            json_item['wsdl'] = ''
-        json_data.append(json_item)
+            subsystem_status = 'error'
+            subsystem_badge = u' <span class="badge badge-danger">Error</span>'
+        body += u'<div class="card">\n' \
+                u'<div class="card-header">\n' \
+                u'<a class="card-link" data-toggle="collapse" href="#collapse{}">\n' \
+                u'{}{}\n' \
+                u'</a>\n' \
+                u'</div>\n'.format(card_nr, subsystem_key, subsystem_badge)
+        body += u'<div id="collapse{}" class="collapse">\n' \
+                u'<div class="card-body">\n'.format(card_nr)
+        if subsystem_status == 'empty':
+            body += u'<p>No services found</p>'
+        elif subsystem_status == 'error':
+            body += u'<p>Error while getting list of services</p>'
+        subsystem = subsystem_key.split('/')
+        json_subsystem = {
+            'xRoadInstance': subsystem[0],
+            'memberClass': subsystem[1],
+            'memberCode': subsystem[2],
+            'subsystemCode': subsystem[3],
+            'subsystemStatus': 'ERROR' if subsystem_status == 'error' else 'OK',
+            'methods': []
+        }
+        for method_key in sorted(methods.keys()):
+            method = method_key.split('/')
+            json_method = {
+                'serviceCode': method[4],
+                'serviceVersion': method[5],
+            }
+            if methods[method_key] == 'SKIPPED':
+                body += u'<p>{} (WSDL skipped due to previous Timeout)</p>'.format(
+                    method_key, methods[method_key])
+                json_method['methodStatus'] = 'SKIPPED'
+                json_method['wsdl'] = ''
+            elif methods[method_key] == 'TIMEOUT':
+                body += u'<p>{} (WSDL query timed out)</p>'.format(method_key, methods[method_key])
+                json_method['methodStatus'] = 'TIMEOUT'
+                json_method['wsdl'] = ''
+            elif methods[method_key]:
+                body += u'<p>{} (<a href="{}">WSDL</a>)</p>'.format(
+                    method_key, methods[method_key])
+                json_method['methodStatus'] = 'OK'
+                json_method['wsdl'] = methods[method_key]
+            else:
+                body += u'<p>{} (Error while downloading or parsing of WSDL)</p>'.format(
+                    method_key, methods[method_key])
+                json_method['methodStatus'] = 'ERROR'
+                json_method['wsdl'] = ''
+
+            json_subsystem['methods'].append(json_method)
+        # Closing: card-body, collapseX, card
+        body += u'</div>\n' \
+                u'</div>\n' \
+                u'</div>\n'
+        json_data.append(json_subsystem)
 
     report_time = time.localtime(time.time())
     formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', report_time)
