@@ -375,22 +375,23 @@ def main():
                 'serviceVersion': method[5],
             }
             if methods[method_key] == 'SKIPPED':
-                body += u'<p>{} (WSDL skipped due to previous Timeout)</p>'.format(
-                    method_key, methods[method_key])
+                body += u'<p>Test: {} <span class="badge badge-warning">WSDL skipped due to ' \
+                        u'previous Timeout</span></p>'.format(method_key)
                 json_method['methodStatus'] = 'SKIPPED'
                 json_method['wsdl'] = ''
             elif methods[method_key] == 'TIMEOUT':
-                body += u'<p>{} (WSDL query timed out)</p>'.format(method_key, methods[method_key])
+                body += u'<p>Test: {} <span class="badge badge-danger">WSDL query timed out' \
+                        u'</span></p>'.format(method_key)
                 json_method['methodStatus'] = 'TIMEOUT'
                 json_method['wsdl'] = ''
             elif methods[method_key]:
-                body += u'<p>{} (<a href="{}">WSDL</a>)</p>'.format(
+                body += u'<p>{}: <a href="{}" class="badge badge-success">WSDL</a></p>'.format(
                     method_key, methods[method_key])
                 json_method['methodStatus'] = 'OK'
                 json_method['wsdl'] = methods[method_key]
             else:
-                body += u'<p>{} (Error while downloading or parsing of WSDL)</p>'.format(
-                    method_key, methods[method_key])
+                body += u'<p>Test: {} <span class="badge badge-danger">Error while downloading ' \
+                        u'or parsing of WSDL</span></p>'.format(method_key)
                 json_method['methodStatus'] = 'ERROR'
                 json_method['wsdl'] = ''
 
