@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from six.moves.queue import Queue, Empty
+from six.moves import queue
 from threading import Thread, Event
 import argparse
 import xrdinfo
@@ -32,7 +32,7 @@ def worker(params):
         # the worker.
         try:
             subsystem = params['work_queue'].get(True, 0.1)
-        except Empty:
+        except queue.Empty:
             if params['shutdown'].is_set():
                 return
             else:
@@ -90,7 +90,7 @@ def main():
         'verify': False,
         'cert': None,
         'thread_cnt': DEFAULT_THREAD_COUNT,
-        'work_queue': Queue(),
+        'work_queue': queue.Queue(),
         'shutdown': Event()
     }
 
