@@ -24,7 +24,7 @@ METHODS_HTML_TEMPL = u"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>All methods with WSDL descriptions</title>
+  <title>All subsystems with methods and WSDL descriptions for instance "{instance}"</title>
   <link rel="stylesheet"
     href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -33,11 +33,12 @@ METHODS_HTML_TEMPL = u"""<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-<h1>All methods with WSDL descriptions</h1>
+<h1>All subsystems with methods and WSDL descriptions for instance "{instance}"</h1>
 <p>Report time: {report_time}</p>
 <p><a href="history.html">History</a></p>
 <p>Latest data in <a href="index.json">JSON</a> form.</p>
 <p>This report in <a href="index_{suffix}.json">JSON</a> form.</p>
+<p>NB! Expanding all subsystems is slow operation.</p>
 <button type="button" class="btn" onClick="$('#accordion .collapse').collapse('show');">
 Expand all subsystems
 </button>
@@ -45,8 +46,7 @@ Expand all subsystems
 Collapse all subsystems
 </button>
 <div id="accordion">
-{body}
-</div>
+{body}</div>
 </div>
 </body>
 </html>
@@ -376,22 +376,22 @@ def main():
             }
             if methods[method_key] == 'SKIPPED':
                 body += u'<p>Test: {} <span class="badge badge-warning">WSDL skipped due to ' \
-                        u'previous Timeout</span></p>'.format(method_key)
+                        u'previous Timeout</span></p>\n'.format(method_key)
                 json_method['methodStatus'] = 'SKIPPED'
                 json_method['wsdl'] = ''
             elif methods[method_key] == 'TIMEOUT':
                 body += u'<p>Test: {} <span class="badge badge-danger">WSDL query timed out' \
-                        u'</span></p>'.format(method_key)
+                        u'</span></p>\n'.format(method_key)
                 json_method['methodStatus'] = 'TIMEOUT'
                 json_method['wsdl'] = ''
             elif methods[method_key]:
-                body += u'<p>{}: <a href="{}" class="badge badge-success">WSDL</a></p>'.format(
+                body += u'<p>{}: <a href="{}" class="badge badge-success">WSDL</a></p>\n'.format(
                     method_key, methods[method_key])
                 json_method['methodStatus'] = 'OK'
                 json_method['wsdl'] = methods[method_key]
             else:
                 body += u'<p>Test: {} <span class="badge badge-danger">Error while downloading ' \
-                        u'or parsing of WSDL</span></p>'.format(method_key)
+                        u'or parsing of WSDL</span></p>\n'.format(method_key)
                 json_method['methodStatus'] = 'ERROR'
                 json_method['wsdl'] = ''
 
@@ -405,7 +405,14 @@ def main():
     report_time = time.localtime(time.time())
     formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', report_time)
     suffix = time.strftime('%Y%m%d%H%M%S', report_time)
-    html = METHODS_HTML_TEMPL.format(report_time=formatted_time, suffix=suffix, body=body)
+
+    s = re.search('<instanceIdentifier>(.+?)</instanceIdentifier>', shared_params)
+    if s and s.group(1):
+        instance = s.group(1)
+    else:
+        instance = u'???'
+    html = METHODS_HTML_TEMPL.format(
+        instance=instance, report_time=formatted_time, suffix=suffix, body=body)
     with open(u'{}/index_{}.html'.format(args.path, suffix), 'w') as f:
         if six.PY2:
             f.write(html.encode('utf-8'))
