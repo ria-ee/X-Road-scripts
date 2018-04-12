@@ -8,14 +8,15 @@ import re
 import six
 import time
 
-
 parser = argparse.ArgumentParser(
     description='Get time of X-Road global configuration parts expiration.',
     formatter_class=argparse.RawDescriptionHelpFormatter,
-    epilog='Status returns number of seconds until expiration of global configuration part closest to expiry.'
+    epilog='Status returns number of seconds until expiration of global configuration part closest'
+           ' to expiry.'
 )
 parser.add_argument('-s', help='Output status only', action='store_true')
-parser.add_argument('--inst', metavar='INSTANCES', help='filter output with comma separated list of X-Road instances.')
+parser.add_argument('--inst', metavar='INSTANCES',
+                    help='filter output with comma separated list of X-Road instances.')
 args = parser.parse_args()
 
 instances = ()

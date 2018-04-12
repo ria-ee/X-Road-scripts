@@ -2,13 +2,11 @@
 
 from subprocess import Popen, PIPE, check_output
 import argparse
-import base64
 import calendar
 import os
 import re
 import time
 import xml.etree.ElementTree as ET
-
 
 parser = argparse.ArgumentParser(
     description='Get OCSP production time for X-Road certificates.',
@@ -21,9 +19,10 @@ args = parser.parse_args()
 cache = {}
 for fileName in os.listdir('/var/cache/xroad'):
     if re.match('^.*\.ocsp$', fileName):
-        out = check_output(['openssl', 'ocsp', '-noverify', '-text',
-            '-respin', '/var/cache/xroad/{}'.format(fileName)]).decode('utf-8')
-        r = re.search('^      Serial Number: (.+)$', out, re.MULTILINE)
+        out = check_output(
+            ['openssl', 'ocsp', '-noverify', '-text', '-respin',
+             '/var/cache/xroad/{}'.format(fileName)]).decode('utf-8')
+        r = re.search('^ {6}Serial Number: (.+)$', out, re.MULTILINE)
         if r and r.group(1):
             cache[r.group(1)] = out
 
@@ -33,21 +32,25 @@ with open('/etc/xroad/signer/keyconf.xml', 'r') as keyconf:
     for key in root.findall('./device/key'):
         type = 'SIGN' if key.attrib['usage'] == 'SIGNING' else 'AUTH'
         keyId = key.find('./keyId').text
-        friendlyName = key.find('./friendlyName').text if key.find('./friendlyName') is not None and key.find('./friendlyName').text is not None else ''
+        friendlyName = key.find('./friendlyName').text if key.find(
+            './friendlyName') is not None and key.find('./friendlyName').text is not None else ''
         for cert in key.findall('./cert'):
-            if not (cert.attrib['active'] == 'true' and cert.find('./status').text == 'registered'):
+            if not (cert.attrib['active'] == 'true' and cert.find(
+                    './status').text == 'registered'):
                 continue
             contents = cert.find('./contents').text
             # Adding newlines to base64
-            contents = base64.encodestring(base64.decodestring(contents.encode('utf-8'))).decode('utf-8')
-            pem = '-----BEGIN CERTIFICATE-----\n{}-----END CERTIFICATE-----\n'.format(contents)
-            p = Popen(['openssl', 'x509', '-noout', '-serial'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            contents = '\n'.join([contents[i:i + 76] for i in range(0, len(contents), 76)])
+            pem = '-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n'.format(contents)
+            p = Popen(['openssl', 'x509', '-noout', '-serial'], stdin=PIPE, stdout=PIPE,
+                      stderr=PIPE)
             stdout, stderr = p.communicate(pem.encode('utf-8'))
             r = re.match('^serial=(.+)$', stdout.decode('utf-8'))
             if r and r.group(1):
                 serial = r.group(1)
-                r = re.search('^    Produced At: (.+)$', cache[serial] , re.MULTILINE)
-                if serial in cache and r and re.search('^    Cert Status: good$', cache[serial], re.MULTILINE):
+                r = re.search('^ {4}Produced At: (.+)$', cache[serial], re.MULTILINE)
+                if serial in cache and r and re.search(
+                        '^ {4}Cert Status: good$', cache[serial], re.MULTILINE):
                     t = time.strptime(r.group(1), '%b %d %H:%M:%S %Y %Z')
                     produced = time.strftime('%Y-%m-%d %H:%M:%S', t)
                     if not args.s:

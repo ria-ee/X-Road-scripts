@@ -6,7 +6,6 @@ import psycopg2
 import re
 import time
 
-
 parser = argparse.ArgumentParser(
     description='Get time of last successful X-Road message.',
     formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -17,8 +16,10 @@ args = parser.parse_args()
 
 with open('/etc/xroad/db.properties', 'r') as dbConf:
     for line in dbConf:
-        # Example: op-monitor.hibernate.connection.url = jdbc:postgresql://127.0.0.1:5432/op-monitor
-        m = re.match('^op-monitor.hibernate.connection.url\s*=\s*jdbc:postgresql://(.+):(.+)/(.+)$', line)
+        # Example:
+        # op-monitor.hibernate.connection.url = jdbc:postgresql://127.0.0.1:5432/op-monitor
+        m = re.match(
+            '^op-monitor.hibernate.connection.url\s*=\s*jdbc:postgresql://(.+):(.+)/(.+)$', line)
         if m:
             host = m.group(1)
             port = m.group(2)
@@ -34,7 +35,8 @@ with open('/etc/xroad/db.properties', 'r') as dbConf:
         if m:
             password = m.group(1)
 
-conn = psycopg2.connect("host={} port={} dbname={} user={} password={}".format(host, port, dbname, user, password))
+conn = psycopg2.connect(
+    'host={} port={} dbname={} user={} password={}'.format(host, port, dbname, user, password))
 cur = conn.cursor()
 
 cur.execute("""select to_timestamp(max(monitoring_data_ts)) at time zone 'UTC'

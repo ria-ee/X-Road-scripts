@@ -6,7 +6,6 @@ import time
 import sys
 from six.moves import configparser
 
-
 parser = argparse.ArgumentParser(
     description='Checks when hosts in Zabbix were updated.',
     epilog='Command line arguments override configuration file.')
@@ -15,8 +14,9 @@ parser.add_argument('--url', help='Zabbix URL')
 parser.add_argument('--user', help='Zabbix user')
 parser.add_argument('--password', help='Zabbix password')
 parser.add_argument('--instance', help='X-Road instance filter')
-parser.add_argument('-s', help='Output only percentage of hosts that were not '
-                               'updated in the last S seconds', type=int)
+parser.add_argument(
+    '-s', help='Output only percentage of hosts that were not updated in the last S seconds',
+    type=int)
 args = parser.parse_args()
 
 url = ''
@@ -80,7 +80,7 @@ for host in hosts:
 
         if items and items[0]:
             item = items[0]
-            if item['lastclock'] and item['lastclock'] <> '0':
+            if item['lastclock'] and item['lastclock'] != '0':
                 last_update = int(time.time() - float(item['lastclock']))
                 if not args.s:
                     print('host: {}; last data was {} seconds ago'.format(
