@@ -15,6 +15,7 @@ import time
 import calendar
 import xml.etree.ElementTree as ElementTree
 import six.moves.urllib.parse as urlparse
+from distutils.version import LooseVersion
 from six.moves import queue
 from six.moves import configparser
 
@@ -318,7 +319,7 @@ def load_conf(conf_arg):
     try:
         config.read(conf_name)
     except configparser.Error as e:
-        print_error(u"Cannot load configuration '{}'\nDetail: {}\n".format(conf_name, e))
+        print_error(u"Cannot load configuration '{}'\nDetail: {}".format(conf_name, e))
         exit(1)
 
     if CONF_SECTION not in config.sections():
@@ -330,7 +331,7 @@ def load_conf(conf_arg):
             return params
         else:
             # User provided configuration is incorrect
-            print_error(u"No [{}] section found in configuration file '{}'.\n".format(
+            print_error(u"No [{}] section found in configuration file '{}'.".format(
                 CONF_SECTION, conf_name))
             exit(1)
 
@@ -380,7 +381,7 @@ def load_conf(conf_arg):
         if 'servers'.lower() in conf_items:
             params['servers'] = config.get(CONF_SECTION, 'servers')
     except ValueError as e:
-        print_error(u"Incorrect value found in configuration file '{}'.\nDetail: {}\n".format(
+        print_error(u"Incorrect value found in configuration file '{}'.\nDetail: {}".format(
             conf_name, e))
         exit(1)
 
@@ -607,6 +608,9 @@ def get_metric(params, node, server):
     """Convert XML metric to ZabbixMetric.
        Return Zabbix packet elements.
     """
+    if params is None or node is None or server is None:
+        return None
+
     p = []
     nsp = '{' + NS['m'] + '}'
 
@@ -645,6 +649,9 @@ def get_x_road_packages(params, node, server):
     packages)
     Return Zabbix packet elements.
     """
+    if params is None or node is None or server is None:
+        return None
+
     p = []
 
     try:
@@ -667,6 +674,9 @@ def get_certificates(params, node, server):
     """Convert XML Certificates metric to ZabbixMetric
     Return Zabbix packet elements.
     """
+    if params is None or node is None or server is None:
+        return None
+
     p = []
 
     try:
@@ -712,8 +722,7 @@ def get_certificates(params, node, server):
         return p
     except AttributeError:
         if params['debug'] > 1:
-            print_debug(u"get_x_road_packages: Incorrect node: {}".format(
-                ElementTree.tostring(node)))
+            print_debug(u"get_certificates: Incorrect node: {}".format(ElementTree.tostring(node)))
         return None
 
 
@@ -729,7 +738,7 @@ def host_mon(params, server_data):
     m = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', server_data)
 
     if m is None or m.lastindex != 5:
-        print_error(u"Incorrect server string '{}'!\n".format(server_data))
+        print_error(u"Incorrect server string '{}'!".format(server_data))
         return
 
     host_visible_name = m.group(0)
@@ -741,12 +750,12 @@ def host_mon(params, server_data):
     # Check if Host is added to Zabbix and adds the Host if necessary
     host_data = check_host(params, host_name, host_visible_name)
     if host_data is None:
-        print_error(u"Cannot add Host '{}' to Zabbix!\n".format(host_name))
+        print_error(u"Cannot add Host '{}' to Zabbix!".format(host_name))
         return
 
     # Check if Host is disabled (status == 1)
     if host_data['status'] == 1:
-        print_error(u"Host '{}' is disabled.\n".format(host_name))
+        print_error(u"Host '{}' is disabled.".format(host_name))
         return
 
     host_apps = {}
@@ -760,12 +769,12 @@ def host_mon(params, server_data):
     if params['envmon']:
         # Check if Host has envmon template in "parentTemplates"
         if check_template(params, host_data['hostid'], host_data['parentTemplates']) is None:
-            print_error(u"Cannot add EnvMon Template to Host '{}'!\n".format(host_name))
+            print_error(u"Cannot add EnvMon Template to Host '{}'!".format(host_name))
             return
     else:
         # Adding missing Server Items
         if check_server_items(params, host_data['hostid'], host_items) is None:
-            print_error(u"Cannot add some of the Items for Host '{}'!\n".format(host_name))
+            print_error(u"Cannot add some of the Items for Host '{}'!".format(host_name))
             return
 
     # Request body
@@ -795,7 +804,7 @@ def host_mon(params, server_data):
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print_error(
-            u"Cannot get response for '{}' ({}: {})!\n".format(
+            u"Cannot get response for '{}' ({}: {})!".format(
                 host_visible_name, type(e).__name__, e))
         return
 
@@ -811,7 +820,7 @@ def host_mon(params, server_data):
         if metrics is None:
             raise Exception('No data')
     except Exception as e:
-        print_error(u"Cannot parse response of '{}' ({}: {})!\n".format(
+        print_error(u"Cannot parse response of '{}' ({}: {})!".format(
             host_visible_name, type(e).__name__, e))
         if params['debug'] > 1:
             print_debug(u"host_mon -> Response: {}".format(response.content))
@@ -823,45 +832,49 @@ def host_mon(params, server_data):
     if params['envmon']:
         # Host metrics
         for item in ENVMON_METRICS:
-            metric = get_metric(
-                params,
-                metrics.find(".//m:{}[m:name='{}']".format(item['type'], item['name']), NS),
-                host_name)
+            metric = None
+            metric_element = metrics.find(
+                ".//m:{}[m:name='{}']".format(item['type'], item['name']), NS)
+            if metric_element is not None:
+                metric = get_metric(params, metric_element, host_name)
             if metric is not None:
                 packet += metric
             else:
-                print_error(u"Metric '{}' for Host '{}' is not available!\n".format(
+                print_error(u"Metric '{}' for Host '{}' is not available!".format(
                     item['name'], host_name))
 
         # It might not be a good idea to store full Package list in
         # zabbix.
         # As a compromise we filter only X-Road packages.
-        metric = get_x_road_packages(
-            params, metrics.find(".//m:metricSet[m:name='Packages']", NS), host_name)
+        metric = None
+        metric_element = metrics.find(".//m:metricSet[m:name='Packages']", NS)
+        if metric_element is not None:
+            metric = get_x_road_packages(params, metric_element, host_name)
         if metric is not None:
             packet += metric
         else:
-            print_error(u"MetricSet 'Packages' for Host '{}' is not available!\n".format(
-                host_name))
+            print_error(u"MetricSet 'Packages' for Host '{}' is not available!".format(host_name))
 
         # Finding proxy version
         proxy_version = metrics.find(".//m:stringMetric[m:name='proxyVersion']", NS)
         proxy_version_value = proxy_version.find('./m:value', NS).text
 
         # Certificates metrics are not supported before '6.16.0-1'
-        if proxy_version_value > '6.16.0-1':
+        if LooseVersion(proxy_version_value) > LooseVersion('6.16.0-1'):
             # Certificates metrics.
             # Checking validity information of SIGN, AUTH and Security
             # Server's TLS certificates that are enabled.
             # INTERNAL_IS_CLIENT_TLS will not influence X-Road
             # because Security Server does not check for validity of
             # client TLS certificates.
-            metric = get_certificates(
-                params, metrics.find(".//m:metricSet[m:name='Certificates']", NS), host_name)
+            metric = None
+            metric_element = metrics.find(".//m:metricSet[m:name='Certificates']", NS)
+            if metric_element is not None:
+                metric = get_certificates(params, metric_element, host_name)
             if metric is not None:
                 packet += metric
             else:
-                print_error(u"MetricSet 'Certificates' for Host '{}' is not available!\n".format(
+                print_error(u"MetricSet 'Certificates' for Host '{}' is not available!".format(
                     host_name))
     else:
         # Host metrics
@@ -873,7 +886,7 @@ def host_mon(params, server_data):
                     metric_path, NS).text))
             except AttributeError:
                 print_error(
-                    u"Metric '{}' for Host '{}' is not available!\n".format(metric_key, host_name))
+                    u"Metric '{}' for Host '{}' is not available!".format(metric_key, host_name))
 
         for service_events in metrics.findall('om:servicesEvents/om:serviceEvents', NS):
             service_name = get_service_name(service_events.find('./om:service', NS))
@@ -883,14 +896,14 @@ def host_mon(params, server_data):
             host_apps = check_app(params, host_data['hostid'], host_apps, service_name)
             if host_apps is None:
                 print_error(
-                    u"Cannot add Application '{}' to Host '{}'!\n".format(service_name, host_name))
+                    u"Cannot add Application '{}' to Host '{}'!".format(service_name, host_name))
                 return
 
             # Check if Service Items are added
             if check_service_items(
                     params, host_data['hostid'], host_items, service_name, service_key,
                     host_apps[service_name]) is None:
-                print_error(u"Cannot add some of the service '{}' Items to Host '{}'!\n".format(
+                print_error(u"Cannot add some of the service '{}' Items to Host '{}'!".format(
                     service_name, host_name))
                 return
 
@@ -912,7 +925,7 @@ def host_mon(params, server_data):
             print_debug(u"Saving Health metrics for Host '{}'.".format(host_name))
         sender.send(packet)
     except Exception as e:
-        print_error(u"Cannot save Health metrics for Host '{}'!\n{}\n".format(host_name, e))
+        print_error(u"Cannot save Health metrics for Host '{}'!\n{}".format(host_name, e))
 
 
 def worker(params):
@@ -930,7 +943,7 @@ def worker(params):
             # Calling main processing function
             host_mon(params, item)
         except Exception as e:
-            print_error(u"Unexpected error: {}: {}\n".format(type(e).__name__, e))
+            print_error(u"Unexpected error: {}: {}".format(type(e).__name__, e))
         finally:
             params['work_queue'].task_done()
 
@@ -961,14 +974,14 @@ def main():
         params['zapi'] = ZabbixAPI(
             url=params['zabbix_url'], user=params['zabbix_user'], password=params['zabbix_pass'])
     except Exception as e:
-        print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}\n".format(
+        print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}".format(
             params['zabbix_url'], e))
         exit(1)
 
     # Check if EnvMon Template exists
     if params['envmon'] and not get_template_name(
             params, params['envmon_template_id']) == params['envmon_template_name']:
-        print_error(u"EnvMon Template (id='{}', name='{}') not found in Zabbix!\n".format(
+        print_error(u"EnvMon Template (id='{}', name='{}') not found in Zabbix!".format(
             params['envmon_template_id'], params['envmon_template_name']))
         exit(1)
 
