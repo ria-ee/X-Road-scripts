@@ -8,6 +8,8 @@ import re
 import six
 import time
 
+DEFAULT_GLOBALCONF_PATH = '/etc/xroad/globalconf'
+
 parser = argparse.ArgumentParser(
     description='Get time of X-Road global configuration parts expiration.',
     formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -17,6 +19,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument('-s', help='Output status only', action='store_true')
 parser.add_argument('--inst', metavar='INSTANCES',
                     help='filter output with comma separated list of X-Road instances.')
+parser.add_argument('--path', metavar='PATH',
+                    help='override the default path to global configuration.')
 args = parser.parse_args()
 
 instances = ()
@@ -26,10 +30,17 @@ if args.inst and six.PY2:
 elif args.inst:
     instances = args.inst.split(',')
 
+globalconf_path = DEFAULT_GLOBALCONF_PATH
+if args.path and six.PY2:
+    # Convert to unicode
+    globalconf_path = args.path.decode('utf-8')
+elif args.inst:
+    globalconf_path = args.path
+
 conf_time = 0
-for item in os.walk('/etc/xroad/globalconf'):
+for item in os.walk(globalconf_path):
     path = item[0]
-    s = re.search('^/etc/xroad/globalconf/(.+)$', path)
+    s = re.search('^{}/(.+)$'.format(globalconf_path), path)
     if s and s.group(1) in instances:
         inst = s.group(1)
     else:
