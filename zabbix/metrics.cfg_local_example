@@ -1,0 +1,42 @@
+# An example for collecting data from local Security Server.
+# Note that Collection of Environmental monitoring is allowed only for
+# central monitoring client and owner of Security Server.
+# Leave MONITORING_CLIENT_SUBSYSTEM empty and use the correct MEMBER
+# identifier of the owner of local Security Server to collect
+# Environmental monitoring data from that Server.
+
+[metrics]
+# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+debug = 1
+
+# Zabbix configuration
+zabbix_url = https://myzabbix.server/
+zabbix_user = ZABBIX_USER
+zabbix_pass = ZABBIX_PASS
+
+# EnvMon template configuration
+envmon_template_id = 10242
+envmon_template_name = X-Road Environmental monitoring
+
+# Security server URL used by Central monitoring:
+server_url = https://xrd1.ss.dns
+
+# Path to TLS certificate and key in case when Security Server requires
+# TLS authentication
+tls_cert = certs/my.crt
+tls_key = certs/my.key
+
+# Client subsystem/member that performs health data collection:
+monitoring_client_inst = INST
+monitoring_client_class = GOV
+monitoring_client_member = 00000001
+monitoring_client_subsystem =
+
+# How many threads to use for data querying.
+thread_count = 1
+
+# Timeout for http requests
+timeout = 15.0
+
+# List of servers to collect data from
+servers = INST/GOV/00000001/00000001_1/xrd1.ss.dns

@@ -2,3 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Configuration files contain passwords
+*.cfg
+
+.idea/
+venv*/

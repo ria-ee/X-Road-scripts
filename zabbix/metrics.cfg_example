@@ -1,0 +1,40 @@
+# An example for central monitoring client that can collect data from
+# all servers in X-Road instance.
+
+[metrics]
+# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+debug = 1
+
+# Zabbix configuration
+zabbix_url = https://myzabbix.server/
+zabbix_user = ZABBIX_USER
+zabbix_pass = ZABBIX_PASS
+
+# EnvMon template configuration
+envmon_template_id = 10242
+envmon_template_name = X-Road Environmental monitoring
+
+# Security server URL used by Central monitoring:
+server_url = http://xrd0.ss.dns
+
+# Path to TLS certificate and key in case when Security Server requires
+# TLS authentication
+#tls_cert = certs/my.crt
+#tls_key = certs/my.key
+
+# Client subsystem/member that performs health data collection:
+monitoring_client_inst = INST
+monitoring_client_class = GOV
+monitoring_client_member = 00000000
+monitoring_client_subsystem = Central monitoring
+
+# How many threads to use for data querying.
+thread_count = 5
+
+# Timeout for http requests
+timeout = 15.0
+
+# List of servers to collect data from
+# If not specified then list is expected from STDIN
+#servers = INST/GOV/00000000/00000000_1/xrd0.ss.dns
+#    INST/GOV/00000001/00000001_1/xrd1.ss.dns
