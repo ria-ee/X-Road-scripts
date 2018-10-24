@@ -539,7 +539,7 @@ def add_item(params, host_id, item, app):
         apps = []
         if app:
             apps = [app]
-        if params['api_client_version'] == '3.0':
+        if params['api_client_version'] == '1':
             result = params['zapi'].item.create(
                 hostid=host_id,
                 name=item['name'] if 'name' in item else item['key'],
@@ -552,7 +552,7 @@ def add_item(params, host_id, item, app):
                 applications=apps,
             )
         else:
-            # 'api_client_version' >= '3.4'
+            # api_client_version=2 --> Zabbix version 3.4+
             result = params['zapi'].item.create(
                 hostid=host_id,
                 name=item['name'] if 'name' in item else item['key'],
@@ -1002,9 +1002,11 @@ def main():
         exit(1)
 
     params['api_version'] = params['zapi'].api_version()
-    params['api_client_version'] = '3.0'
+    # api_client_version=1 --> 3.0<=Zabbix version<3.4
+    params['api_client_version'] = '1'
     if LooseVersion(params['api_version']) >= LooseVersion('3.4'):
-        params['api_client_version'] = '3.4'
+        # api_client_version=2 --> 3.4<=Zabbix version
+        params['api_client_version'] = '2'
 
     if params['debug']:
         print(u"Connected to Zabbix API version {} (using client version {})".format(
