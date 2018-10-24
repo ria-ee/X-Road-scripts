@@ -539,17 +539,32 @@ def add_item(params, host_id, item, app):
         apps = []
         if app:
             apps = [app]
-        result = params['zapi'].item.create(
-            hostid=host_id,
-            name=item['name'] if 'name' in item else item['key'],
-            key_=item['key'],
-            type=params['zabbix_trapper_type'],
-            value_type=item['type'],
-            units=item['units'],
-            history=item['history'],
-            description=item['description'],
-            applications=apps,
-        )
+        if params['api_client_version'] == '3.0':
+            result = params['zapi'].item.create(
+                hostid=host_id,
+                name=item['name'] if 'name' in item else item['key'],
+                key_=item['key'],
+                type=params['zabbix_trapper_type'],
+                value_type=item['type'],
+                units=item['units'],
+                history=item['history'],
+                description=item['description'],
+                applications=apps,
+            )
+        else:
+            # 'api_client_version' >= '3.4'
+            result = params['zapi'].item.create(
+                hostid=host_id,
+                name=item['name'] if 'name' in item else item['key'],
+                key_=item['key'],
+                type=params['zabbix_trapper_type'],
+                trapper_hosts='0.0.0.0/0',
+                value_type=item['type'],
+                units=item['units'],
+                history=item['history']+'d',
+                description=item['description'],
+                applications=apps,
+            )
         return result['itemids']
     except Exception as e:
         if params['debug'] > 1:
@@ -977,6 +992,15 @@ def main():
         print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}".format(
             params['zabbix_url'], e))
         exit(1)
+
+    params['api_version'] = params['zapi'].api_version()
+    params['api_client_version'] = '3.0'
+    if LooseVersion(params['api_version']) >= LooseVersion('3.4'):
+        params['api_client_version'] = '3.4'
+
+    if params['debug']:
+        print(u"Connected to Zabbix API version {} (using client version {})".format(
+            params['api_version'], params['api_client_version']))
 
     # Check if EnvMon Template exists
     if params['envmon'] and not get_template_name(

@@ -1,0 +1,4 @@
+six
+py-zabbix
+requests
+psycopg2
