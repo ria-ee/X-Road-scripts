@@ -633,7 +633,7 @@ def get_metric(params, node, server):
         try:
             name = node.find('./m:name', NS).text
             # Some names may have '/' character which is forbidden by
-            # zabbix
+            # Zabbix
             name = name.replace('/', '')
             p.append(ZabbixMetric(server, name, node.find('./m:value', NS).text))
             return p
@@ -859,7 +859,7 @@ def host_mon(params, server_data):
                     item['name'], host_name))
 
         # It might not be a good idea to store full Package list in
-        # zabbix.
+        # Zabbix.
         # As a compromise we filter only X-Road packages.
         metric = None
         metric_element = metrics.find(".//m:metricSet[m:name='Packages']", NS)
@@ -932,15 +932,21 @@ def host_mon(params, server_data):
                 except AttributeError:
                     pass
 
-    # Pushing metrics to zabbix
+    # Pushing metrics to Zabbix
     sender = ZabbixSender(zabbix_server=urlparse.urlsplit(params['zabbix_url']).hostname,
                           zabbix_port=params['zabbix_sender_port'])
     try:
         if params['debug']:
-            print_debug(u"Saving Health metrics for Host '{}'.".format(host_name))
-        sender.send(packet)
+            if params['envmon']:
+                print_debug(u"Saving Environment metrics for Host '{}'.".format(host_name))
+            else:
+                print_debug(u"Saving Health metrics for Host '{}'.".format(host_name))
+
+        send_result = sender.send(packet)
+        if params['debug']:
+            print_debug(send_result)
     except Exception as e:
-        print_error(u"Cannot save Health metrics for Host '{}'!\n{}".format(host_name, e))
+        print_error(u"Cannot save metrics for Host '{}'!\n{}".format(host_name, e))
 
 
 def worker(params):
