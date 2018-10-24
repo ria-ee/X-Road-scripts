@@ -873,6 +873,8 @@ def host_mon(params, server_data):
         # Finding proxy version
         proxy_version = metrics.find(".//m:stringMetric[m:name='proxyVersion']", NS)
         proxy_version_value = proxy_version.find('./m:value', NS).text
+        # Workaround: Some develop versions contain extra quotes.
+        proxy_version_value = proxy_version_value.strip("'")
 
         # Certificates metrics are not supported before '6.16.0-1'
         if LooseVersion(proxy_version_value) > LooseVersion('6.16.0-1'):
