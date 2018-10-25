@@ -13,6 +13,7 @@ import uuid
 import six
 import time
 import calendar
+import logging
 import xml.etree.ElementTree as ElementTree
 import six.moves.urllib.parse as urlparse
 from distutils.version import LooseVersion
@@ -24,7 +25,8 @@ DEFAULT_PARAMS = {
     # Collect Environmental Monitoring data instead of Health data
     'envmon': False,
     # Debug levels:
-    # 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+    # 0 = Errors only; 1 = Simple debug; 2 = Detailed debug;
+    # 3 = Debug py-zabbix (use with thread_count=1).
     'debug': 2,
     # Zabbix configuration
     'zabbix_url': 'http://localhost/',
@@ -1000,6 +1002,16 @@ def main():
         print_error(u"Cannot connect to Zabbix.\nURL: {}\nDetail: {}".format(
             params['zabbix_url'], e))
         exit(1)
+
+    # Debug py-zabbix.
+    # NB! Not debuging initial connection to avoid passwords being
+    # logged to stdout.
+    if params['debug'] > 2:
+        stream = logging.StreamHandler(sys.stdout)
+        stream.setLevel(logging.DEBUG)
+        log = logging.getLogger('pyzabbix')
+        log.addHandler(stream)
+        log.setLevel(logging.DEBUG)
 
     params['api_version'] = params['zapi'].api_version()
     # api_client_version=1 --> 3.0<=Zabbix version<3.4

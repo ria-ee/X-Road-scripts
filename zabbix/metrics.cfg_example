@@ -2,7 +2,8 @@
 # all servers in X-Road instance.
 
 [metrics]
-# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug.
+# Debug levels: 0 = Errors only; 1 = Simple debug; 2 = Detailed debug;
+# 3 = Debug py-zabbix (use with thread_count=1).
 debug = 1
 
 # Zabbix configuration
