@@ -68,6 +68,11 @@ monitoring collector for Zabbix. Can be used by:
   Server.
 * X-Road members to collect other members Health data.
 
+When using MySQL as Zabbix database pay attention to Zabbix
+installation guide! You need to use **"collate utf8_bin"** database
+creation parameter because service names and versions are case sensitive
+in X-Road and "service.v1" is not equal to "Service.V1".
+
 **NB! Tested with Zabbix 3.0 LTS, 3.4 and 4.0 LTS.**
 
 [zabbix_cron.sh](zabbix/zabbix_cron.sh) - Sample shell script that can
