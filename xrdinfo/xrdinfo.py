@@ -375,10 +375,13 @@ def methods(
         methods_response.encoding = 'utf-8'
 
         # Some servers might return multipart message.
-        envel = re.search('<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', methods_response.text,
-                          re.DOTALL)
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(envel.group(0).encode('utf-8'))
+        envel = re.search(
+            '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', methods_response.text, re.DOTALL)
+        try:
+            # ElementTree.fromstring wants encoded bytes as input (PY2)
+            root = ElementTree.fromstring(envel.group(0).encode('utf-8'))
+        except AttributeError:
+            raise XrdInfoError(u'Received incorrect response')
         if root.find('.//faultstring') is not None:
             raise SoapFaultError(root.find('.//faultstring').text)
 
