@@ -215,9 +215,13 @@ def worker(params):
             params['work_queue'].task_done()
 
 
+def sort_by_time(item):
+    return item['reportTime']
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='X-Road getWsdl request.',
+        description='X-Road getWsdl request to all members.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='By default peer TLS certificate is not validated.'
     )
@@ -438,6 +442,7 @@ def main():
 
     json_history.append({'reportTime': formatted_time, 'reportPath': u'index_{}.json'.format(
         suffix)})
+    json_history.sort(key=sort_by_time, reverse=True)
 
     with open(u'{}/history.json'.format(args.path), 'w') as f:
         if six.PY2:
