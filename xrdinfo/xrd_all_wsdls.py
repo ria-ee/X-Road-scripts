@@ -135,6 +135,7 @@ def worker(params):
                 return
             else:
                 continue
+        wsdl_rel_path = ''
         try:
             wsdl_rel_path = xrdinfo.stringify(subsystem)
             wsdl_path = u'{}/{}'.format(params['path'], wsdl_rel_path)
@@ -242,6 +243,7 @@ def main():
     parser.add_argument(
         '--instance', metavar='INSTANCE',
         help='use this instance instead of local X-Road instance.')
+    parser.add_argument('--no-html', action='store_true', help='disable HTML generation.')
     args = parser.parse_args()
 
     params = {
@@ -257,7 +259,8 @@ def main():
         'work_queue': queue.Queue(),
         'results': {},
         'results_lock': Lock(),
-        'shutdown': Event()
+        'shutdown': Event(),
+        'html': True
     }
 
     if args.v:
@@ -295,6 +298,9 @@ def main():
 
     if args.threads and args.threads > 0:
         params['thread_cnt'] = args.threads
+
+    if args.no_html:
+        params['html'] = False
 
     shared_params = None
     try:
@@ -411,43 +417,70 @@ def main():
         instance = s.group(1)
     else:
         instance = u'???'
-    html = METHODS_HTML_TEMPL.format(
-        instance=instance, report_time=formatted_time, suffix=suffix, body=body)
-    with open(u'{}/index_{}.html'.format(args.path, suffix), 'w') as f:
-        if six.PY2:
-            f.write(html.encode('utf-8'))
-        else:
-            f.write(html)
+
+    # JSON output
     with open(u'{}/index_{}.json'.format(args.path, suffix), 'w') as f:
         if six.PY2:
             f.write(json.dumps(json_data, indent=2, ensure_ascii=False).encode('utf-8'))
         else:
             json.dump(json_data, f, indent=2, ensure_ascii=False)
 
-    history_item = u'<p><a href="{}">{}</a></p>\n'.format(
-        u'index_{}.html'.format(suffix), formatted_time)
+    json_history = []
     try:
-        html = u''
-        with open(u'{}/history.html'.format(args.path), 'r') as f:
-            for line in f:
-                if six.PY2:
-                    line = line.decode('utf-8')
-                if line == HISTORY_HEADER:
-                    line = line + history_item
-                html = html + line
+        with open(u'{}/history.json'.format(args.path), 'r') as f:
+            if six.PY2:
+                json_history = json.loads(f.read().decode('utf-8'))
+            else:
+                json_history = json.load(f)
     except IOError:
         # Cannot open history.html
-        html = HISTORY_HTML_TEMPL.format(body=history_item)
+        pass
 
-    with open(u'{}/history.html'.format(args.path), 'w') as f:
+    json_history.append({'reportTime': formatted_time, 'reportPath': u'index_{}.json'.format(
+        suffix)})
+
+    with open(u'{}/history.json'.format(args.path), 'w') as f:
         if six.PY2:
-            f.write(html.encode('utf-8'))
+            f.write(json.dumps(json_history, indent=2, ensure_ascii=False).encode('utf-8'))
         else:
-            f.write(html)
+            json.dump(json_history, f, indent=2, ensure_ascii=False)
 
-    # Replace index with latest report
-    shutil.copy(u'{}/index_{}.html'.format(args.path, suffix), u'{}/index.html'.format(args.path))
+    # Replace index.json with latest report
     shutil.copy(u'{}/index_{}.json'.format(args.path, suffix), u'{}/index.json'.format(args.path))
+
+    # HTML output
+    if params['html']:
+        html = METHODS_HTML_TEMPL.format(
+            instance=instance, report_time=formatted_time, suffix=suffix, body=body)
+        with open(u'{}/index_{}.html'.format(args.path, suffix), 'w') as f:
+            if six.PY2:
+                f.write(html.encode('utf-8'))
+            else:
+                f.write(html)
+
+        history_item = u'<p><a href="{}">{}</a></p>\n'.format(
+            u'index_{}.html'.format(suffix), formatted_time)
+        try:
+            html = u''
+            with open(u'{}/history.html'.format(args.path), 'r') as f:
+                for line in f:
+                    if six.PY2:
+                        line = line.decode('utf-8')
+                    if line == HISTORY_HEADER:
+                        line = line + history_item
+                    html = html + line
+        except IOError:
+            # Cannot open history.html
+            html = HISTORY_HTML_TEMPL.format(body=history_item)
+
+        with open(u'{}/history.html'.format(args.path), 'w') as f:
+            if six.PY2:
+                f.write(html.encode('utf-8'))
+            else:
+                f.write(html)
+
+        # Replace index.html with latest report
+        shutil.copy(u'{}/index_{}.html'.format(args.path, suffix), u'{}/index.html'.format(args.path))
 
 
 if __name__ == '__main__':
