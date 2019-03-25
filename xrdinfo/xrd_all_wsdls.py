@@ -71,6 +71,15 @@ HISTORY_HTML_TEMPL = u"""<!DOCTYPE html>
 
 HISTORY_HEADER = u'<h1>History</h1>\n'
 
+WSDL_REPLACES = [
+    # [Pattern, Replacement]
+    # "Genereerimise aeg: 22.03.2019 08:00:30"
+    [
+        'Genereerimise aeg: \\d{2}\\.\\d{2}\\.\\d{4} \\d{2}:\\d{2}:\\d{2}',
+        'Genereerimise aeg: DELETED'
+    ]
+]
+
 
 def safe_print(content):
     """Thread safe and unicode safe debug printer."""
@@ -95,7 +104,7 @@ def makedirs(path):
 def hash_wsdls(path):
     hashes = {}
     for file_name in os.listdir(path):
-        s = re.search('^(\d+)\.wsdl$', file_name)
+        s = re.search('^(\\d+)\\.wsdl$', file_name)
         if s:
             # Reading as bytes to avoid line ending conversion
             with open(u'{}/{}'.format(path, file_name), 'rb') as fh:
@@ -105,13 +114,17 @@ def hash_wsdls(path):
 
 
 def save_wsdl(path, hashes, wsdl):
+    # Replacing dynamically generated comments in WSDL to avoid new WSDL
+    # creation because of comments.
+    for wsdl_replace in WSDL_REPLACES:
+        wsdl = re.sub(wsdl_replace[0], wsdl_replace[1], wsdl)
     wsdl_hash = hashlib.md5(wsdl.encode('utf-8')).hexdigest()
     max_wsdl = -1
     for file_name in hashes.keys():
         if wsdl_hash == hashes[file_name]:
             # Matching WSDL found
             return file_name, hashes
-        s = re.search('^(\d+)\.wsdl$', file_name)
+        s = re.search('^(\\d+)\\.wsdl$', file_name)
         if s:
             if int(s.group(1)) > max_wsdl:
                 max_wsdl = int(s.group(1))
@@ -192,6 +205,12 @@ def worker(params):
                     method_index[xrdinfo.stringify(method)] = ''
                 if params['verbose']:
                     safe_print(txt)
+
+                if xrdinfo.stringify(method) not in method_index:
+                    #if params['verbose']:
+                    safe_print(u'{}: {} - Method was not found in returned WSDL!'.format(
+                        current_thread().getName(), xrdinfo.stringify(method)))
+                    method_index[xrdinfo.stringify(method)] = ''
 
             with params['results_lock']:
                 params['results'][wsdl_rel_path] = {
@@ -485,7 +504,8 @@ def main():
                 f.write(html)
 
         # Replace index.html with latest report
-        shutil.copy(u'{}/index_{}.html'.format(args.path, suffix), u'{}/index.html'.format(args.path))
+        shutil.copy(u'{}/index_{}.html'.format(args.path, suffix), u'{}/index.html'.format(
+            args.path))
 
 
 if __name__ == '__main__':
