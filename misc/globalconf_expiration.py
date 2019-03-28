@@ -41,7 +41,7 @@ conf_time = 0
 for item in os.walk(globalconf_path):
     path = item[0]
     s = re.search('^{}/(.+)$'.format(globalconf_path), path)
-    if s and s.group(1) in instances:
+    if s and (len(instances) == 0 or s.group(1) in instances):
         inst = s.group(1)
     else:
         continue
