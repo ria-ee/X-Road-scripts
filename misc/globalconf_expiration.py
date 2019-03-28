@@ -34,7 +34,7 @@ globalconf_path = DEFAULT_GLOBALCONF_PATH
 if args.path and six.PY2:
     # Convert to unicode
     globalconf_path = args.path.decode('utf-8')
-elif args.inst:
+elif args.path:
     globalconf_path = args.path
 
 conf_time = 0
