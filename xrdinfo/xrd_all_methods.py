@@ -1,10 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
-from six.moves import queue
 from threading import Thread, Event
 import argparse
 import xrdinfo
-import six
+import queue
 import sys
 
 # By default return listMethods
@@ -18,12 +17,9 @@ DEFAULT_THREAD_COUNT = 1
 
 
 def print_error(content):
-    """Thread safe and unicode safe error printer."""
-    content = u"ERROR: {}\n".format(content)
-    if six.PY2:
-        sys.stderr.write(content.encode('utf-8'))
-    else:
-        sys.stderr.write(content)
+    """Error printer."""
+    content = "ERROR: {}\n".format(content)
+    sys.stderr.write(content)
 
 
 def worker(params):
@@ -43,12 +39,10 @@ def worker(params):
                     method=params['method'], timeout=params['timeout'], verify=params['verify'],
                     cert=params['cert']):
                 line = xrdinfo.stringify(method) + '\n'
-                if six.PY2:
-                    line = line.encode('utf-8')
                 # Using thread safe "write" instead of "print"
                 sys.stdout.write(line)
         except Exception as e:
-            print_error(u'{}: {}'.format(type(e).__name__, e))
+            print_error('{}: {}'.format(type(e).__name__, e))
         finally:
             params['work_queue'].task_done()
 
@@ -94,22 +88,15 @@ def main():
         'shutdown': Event()
     }
 
-    if six.PY2:
-        # Convert to unicode
-        params['client'] = params['client'].decode('utf-8')
-
     params['client'] = params['client'].split('/')
     if not (len(params['client']) in (3, 4)):
-        print_error(u'Client name is incorrect: "{}"'.format(args.client))
+        print_error('Client name is incorrect: "{}"'.format(args.client))
         exit(1)
 
     if args.allowed:
         params['method'] = 'allowedMethods'
 
-    if args.instance and six.PY2:
-        # Convert to unicode
-        params['instance'] = args.instance.decode('utf-8')
-    elif args.instance:
+    if args.instance:
         params['instance'] = args.instance
 
     if args.t:
@@ -130,7 +117,7 @@ def main():
             addr=args.url, instance=params['instance'], timeout=params['timeout'],
             verify=params['verify'], cert=params['cert'])
     except xrdinfo.XrdInfoError as e:
-        print_error(u'Cannot download Global Configuration: {}'.format(e))
+        print_error('Cannot download Global Configuration: {}'.format(e))
         exit(1)
 
     # Create and start new threads

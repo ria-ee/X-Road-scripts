@@ -1,8 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import argparse
 import xrdinfo
-import six
 import sys
 
 # Default timeout for HTTP requests
@@ -10,12 +9,9 @@ DEFAULT_TIMEOUT = 5.0
 
 
 def print_error(content):
-    """Thread safe and unicode safe error printer."""
-    content = u"ERROR: {}\n".format(content)
-    if six.PY2:
-        sys.stderr.write(content.encode('utf-8'))
-    else:
-        sys.stderr.write(content)
+    """Error printer."""
+    content = "ERROR: {}\n".format(content)
+    sys.stderr.write(content)
 
 
 def main():
@@ -57,21 +53,16 @@ def main():
     if args.cert and args.key:
         cert = (args.cert, args.key)
 
-    if six.PY2:
-        # Convert to unicode
-        args.client = args.client.decode('utf-8')
-        args.service = args.service.decode('utf-8')
-
     client = args.client.split('/')
     if not (len(client) in (3, 4)):
-        print_error(u'Client name is incorrect: "{}"'.format(args.client))
+        print_error('Client name is incorrect: "{}"'.format(args.client))
         exit(1)
 
     service = args.service.split('/')
     if len(service) == 5:
         service.append('')
     if not (len(service) == 6):
-        print_error(u'Service name is incorrect: "{}"'.format(args.service))
+        print_error('Service name is incorrect: "{}"'.format(args.service))
         exit(1)
 
     wsdl = None
@@ -83,10 +74,7 @@ def main():
         print_error(e)
         exit(1)
 
-    if six.PY2:
-        print(wsdl.encode('utf-8'))
-    else:
-        print(wsdl)
+    print(wsdl)
 
 
 if __name__ == '__main__':

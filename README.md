@@ -1,5 +1,8 @@
 # X-Road-scripts
 
+Python2 is no longer supported. You can find previous scripts with Python2
+support under `py2` branch.
+
 This repository contains helper scripts that can simplify usage and
 administration of X-Road.
 
@@ -12,6 +15,8 @@ If Security Server requires TLS authentication then you can add your TLS
 certificate in Security Server administration interface:
 MEMBER/SUBSYSTEM -> Internal Servers -> INTERNAL TLS CERTIFICATES
 
+Scripts were tested with Python 3.6 (Ubuntu 18.04 LTS)
+
 ## Messagelog:
 [cat_mlog.sh](messagelog/cat_mlog.sh) - This script prints the contents
 of archived X-Road messagelog files to STDOUT. Therefore providing a way
@@ -22,7 +27,7 @@ cat_mlog.sh that additionally outputs message SigningTime.
 
 ## Global Configuration and Metadata services
 [xrdinfo.py](xrdinfo/xrdinfo.py) - Python module that can be imported
-and used in any Python2.7+ or Python3.3+ application. It implements:
+and used in any Python3 application. It implements:
 * loading of global configuration from Security Server, Central Server
   or Configuration Proxy;
 * parsing of shared_params.xml;
@@ -101,23 +106,13 @@ sudo pip install py-zabbix
 Security Server to display the list of Access Rights granted. Time is
 displayed in local timezone. This script is using psycopg2 python module
 that can be installed with the following command:
-
-(Python2)
-```
-sudo apt-get install python-psycopg2
-```
-(Python3)
 ```
 sudo apt-get install python3-psycopg2
 ```
 
 The result is in CSV format and is outputted to STDOUT.
 
-Usage (Python2):
-```
-sudo su xroad -c "python rights_given.py" > rights.csv
-```
-Usage (Python3):
+Usage:
 ```
 sudo su xroad -c "python3 rights_given.py" > rights.csv
 ```

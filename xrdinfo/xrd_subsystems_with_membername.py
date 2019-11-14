@@ -1,8 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import argparse
 import xrdinfo
-import six
 import sys
 
 # Default timeout for HTTP requests
@@ -10,12 +9,9 @@ DEFAULT_TIMEOUT = 5.0
 
 
 def print_error(content):
-    """Thread safe and unicode safe error printer."""
-    content = u"ERROR: {}\n".format(content)
-    if six.PY2:
-        sys.stderr.write(content.encode('utf-8'))
-    else:
-        sys.stderr.write(content)
+    """Error printer."""
+    content = "ERROR: {}\n".format(content)
+    sys.stderr.write(content)
 
 
 def main():
@@ -44,10 +40,7 @@ def main():
     args = parser.parse_args()
 
     instance = None
-    if args.instance and six.PY2:
-        # Convert to unicode
-        instance = args.instance.decode('utf-8')
-    elif args.instance:
+    if args.instance:
         instance = args.instance
 
     timeout = DEFAULT_TIMEOUT
@@ -84,10 +77,7 @@ def main():
     try:
         for subsystem in xrdinfo.subsystems_with_membername(shared_params):
             line = xrdinfo.stringify(subsystem)
-            if six.PY2:
-                print(line.encode('utf-8'))
-            else:
-                print(line)
+            print(line)
     except xrdinfo.XrdInfoError as e:
         print_error(e)
         exit(1)

@@ -1,8 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import argparse
 import xrdinfo
-import six
 import sys
 
 # By default return listMethods
@@ -13,12 +12,9 @@ DEFAULT_TIMEOUT = 5.0
 
 
 def print_error(content):
-    """Thread safe and unicode safe error printer."""
-    content = u"ERROR: {}\n".format(content)
-    if six.PY2:
-        sys.stderr.write(content.encode('utf-8'))
-    else:
-        sys.stderr.write(content)
+    """Error printer."""
+    content = "ERROR: {}\n".format(content)
+    sys.stderr.write(content)
 
 
 def main():
@@ -65,19 +61,14 @@ def main():
     if args.cert and args.key:
         cert = (args.cert, args.key)
 
-    if six.PY2:
-        # Convert to unicode
-        args.client = args.client.decode('utf-8')
-        args.service = args.service.decode('utf-8')
-
     client = args.client.split('/')
     if not (len(client) in (3, 4)):
-        print_error(u'Client name is incorrect: "{}"'.format(args.client))
+        print_error('Client name is incorrect: "{}"'.format(args.client))
         exit(1)
 
     service = args.service.split('/')
     if not (len(service) == 4):
-        print_error(u'Service name is incorrect: "{}"'.format(args.service))
+        print_error('Service name is incorrect: "{}"'.format(args.service))
         exit(1)
 
     try:
@@ -85,12 +76,9 @@ def main():
                 addr=args.url, client=client, producer=service, method=method_type,
                 timeout=timeout, verify=verify, cert=cert):
             line = xrdinfo.stringify(method)
-            if six.PY2:
-                print(line.encode('utf-8'))
-            else:
-                print(line)
+            print(line)
     except Exception as e:
-        print_error(u'{}: {}'.format(type(e).__name__, e))
+        print_error('{}: {}'.format(type(e).__name__, e))
         exit(1)
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 """X-Road informational module."""
 
@@ -7,20 +7,22 @@ __all__ = [
     'shared_params_cs', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
     'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'wsdl',
     'wsdl_methods', 'stringify']
+__version__ = '1.0'
+__author__ = 'Vitali Stupin'
 
-from six import BytesIO
 import re
 import requests
 import socket
-import six.moves.urllib.parse as urlparse
+import urllib.parse as urlparse
 import uuid
 import xml.etree.ElementTree as ElementTree
 import zipfile
+from io import BytesIO
 
 # Timeout for requests
 DEFAULT_TIMEOUT = 5.0
 
-REQUEST_MEMBER_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
+REQUEST_MEMBER_TEMPL = """<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope
         xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
@@ -47,7 +49,7 @@ REQUEST_MEMBER_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
 </SOAP-ENV:Envelope>
 """
 
-REQUEST_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
+REQUEST_SUBSYSTEM_TEMPL = """<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope
         xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
@@ -75,16 +77,16 @@ REQUEST_SUBSYSTEM_TEMPL = u"""<?xml version="1.0" encoding="utf-8"?>
 </SOAP-ENV:Envelope>
 """
 
-METHODS_BODY_TEMPL = u'        <xroad:{service_code}/>'
+METHODS_BODY_TEMPL = '        <xroad:{service_code}/>'
 
-GETWSDL_SERVICE_CODE = u'getWsdl'
+GETWSDL_SERVICE_CODE = 'getWsdl'
 
-GETWSDL_BODY_TEMPL = u"""        <xroad:getWsdl>
+GETWSDL_BODY_TEMPL = """        <xroad:getWsdl>
             <xroad:serviceCode>{service_code}</xroad:serviceCode>
             <xroad:serviceVersion>{service_version}</xroad:serviceVersion>
         </xroad:getWsdl>"""
 
-GETWSDL_BODY_TEMPL_NOVERSION = u"""        <xroad:getWsdl>
+GETWSDL_BODY_TEMPL_NOVERSION = """        <xroad:getWsdl>
             <xroad:serviceCode>{service_code}</xroad:serviceCode>
         </xroad:getWsdl>"""
 
@@ -103,7 +105,7 @@ class XrdInfoError(Exception):
             super(XrdInfoError, self).__init__(exc)
         elif isinstance(exc, Exception):
             # Wrapped exception
-            super(XrdInfoError, self).__init__(u'{}: {}'.format(type(exc).__name__, exc))
+            super(XrdInfoError, self).__init__('{}: {}'.format(type(exc).__name__, exc))
         else:
             # Error message
             super(XrdInfoError, self).__init__(exc)
@@ -118,7 +120,7 @@ class SoapFaultError(XrdInfoError):
     """SOAP Fault received."""
 
     def __init__(self, msg):
-        super(SoapFaultError, self).__init__(u'SoapFault: {}'.format(msg))
+        super(SoapFaultError, self).__init__('SoapFault: {}'.format(msg))
 
 
 def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -149,7 +151,7 @@ def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False,
             ident = ident_file.read()
             ident = ident.decode('utf-8')
         shared_params_file = ver_conf_zip.open(
-            u'verificationconf/{}/shared-params.xml'.format(ident))
+            'verificationconf/{}/shared-params.xml'.format(ident))
         shared_params = shared_params_file.read()
         return shared_params.decode('utf-8')
     except requests.exceptions.Timeout as e:
@@ -197,14 +199,13 @@ def subsystems(shared_params):
     subsystemCode).
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
-        instance = u'' + root.find('./instanceIdentifier').text
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            member_class = u'' + member.find('./memberClass/code').text
-            member_code = u'' + member.find('./memberCode').text
+            member_class = '' + member.find('./memberClass/code').text
+            member_code = '' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
-                subsystem_code = u'' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield (instance, member_class, member_code, subsystem_code)
     except Exception as e:
         raise XrdInfoError(e)
@@ -216,15 +217,14 @@ def subsystems_with_membername(shared_params):
     subsystemCode, Member Name).
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
-        instance = u'' + root.find('./instanceIdentifier').text
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            member_class = u'' + member.find('./memberClass/code').text
-            member_code = u'' + member.find('./memberCode').text
-            member_name = u'' + member.find('./name').text
+            member_class = '' + member.find('./memberClass/code').text
+            member_code = '' + member.find('./memberCode').text
+            member_name = '' + member.find('./name').text
             for subsystem in member.findall('./subsystem'):
-                subsystem_code = u'' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield (instance, member_class, member_code, subsystem_code, member_name)
     except Exception as e:
         raise XrdInfoError(e)
@@ -237,15 +237,14 @@ def registered_subsystems(shared_params):
     subsystemCode).
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
-        instance = u'' + root.find('./instanceIdentifier').text
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            member_class = u'' + member.find('./memberClass/code').text
-            member_code = u'' + member.find('./memberCode').text
+            member_class = '' + member.find('./memberClass/code').text
+            member_code = '' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
                 subsystem_id = subsystem.attrib['id']
-                subsystem_code = u'' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find('./subsystemCode').text
                 if root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
                     yield (instance, member_class, member_code, subsystem_code)
     except Exception as e:
@@ -264,23 +263,22 @@ def subsystems_with_server(shared_params):
     subsystemCode).
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
-        instance = u'' + root.find('./instanceIdentifier').text
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
         for member in root.findall('./member'):
-            member_class = u'' + member.find('./memberClass/code').text
-            member_code = u'' + member.find('./memberCode').text
+            member_class = '' + member.find('./memberClass/code').text
+            member_code = '' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
                 subsystem_id = subsystem.attrib['id']
-                subsystem_code = u'' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find('./subsystemCode').text
                 server_found = False
                 for server in root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
                     owner_id = server.find('./owner').text
                     owner = root.find('./member[@id="{}"]'.format(owner_id))
-                    owner_class = u'' + owner.find('./memberClass/code').text
-                    owner_code = u'' + owner.find('./memberCode').text
-                    server_code = u'' + server.find('./serverCode').text
-                    address = u'' + server.find('./address').text
+                    owner_class = '' + owner.find('./memberClass/code').text
+                    owner_code = '' + owner.find('./memberCode').text
+                    server_code = '' + server.find('./serverCode').text
+                    address = '' + server.find('./address').text
                     yield (
                         instance, member_class, member_code, subsystem_code, instance, owner_class,
                         owner_code, server_code, address)
@@ -298,16 +296,15 @@ def servers(shared_params):
     Server Address).
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
-        instance = u'' + root.find('./instanceIdentifier').text
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
         for server in root.findall('./securityServer'):
             owner_id = server.find('./owner').text
             owner = root.find('./member[@id="{}"]'.format(owner_id))
-            member_class = u'' + owner.find('./memberClass/code').text
-            member_code = u'' + owner.find('./memberCode').text
-            server_code = u'' + server.find('./serverCode').text
-            address = u'' + server.find('./address').text
+            member_class = '' + owner.find('./memberClass/code').text
+            member_code = '' + owner.find('./memberCode').text
+            server_code = '' + server.find('./serverCode').text
+            address = '' + server.find('./address').text
             yield (instance, member_class, member_code, server_code, address)
     except Exception as e:
         raise XrdInfoError(e)
@@ -319,7 +316,7 @@ def addr_ips(address):
     """
     try:
         for ip in socket.gethostbyname_ex(address)[2]:
-            yield (u'' + ip)
+            yield ('' + ip)
     except socket.gaierror:
         # Ignoring DNS name not found error
         pass
@@ -332,12 +329,11 @@ def servers_ips(shared_params):
     Unresolved DNS names are silently ignored.
     """
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(shared_params.encode('utf-8'))
+        root = ElementTree.fromstring(shared_params)
         for server in root.findall('./securityServer'):
             address = server.find('address').text
             for ip in addr_ips(address):
-                yield (u'' + ip)
+                yield ('' + ip)
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -378,10 +374,9 @@ def methods(
         envel = re.search(
             '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', methods_response.text, re.DOTALL)
         try:
-            # ElementTree.fromstring wants encoded bytes as input (PY2)
-            root = ElementTree.fromstring(envel.group(0).encode('utf-8'))
+            root = ElementTree.fromstring(envel.group(0))
         except AttributeError:
-            raise XrdInfoError(u'Received incorrect response')
+            raise XrdInfoError('Received incorrect response')
         if root.find('.//faultstring') is not None:
             raise SoapFaultError(root.find('.//faultstring').text)
 
@@ -454,9 +449,7 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
                 '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', resp.group(1), re.DOTALL)
             if envel:
                 # SOAP Fault found instead of WSDL
-                # ElementTree.fromstring wants encoded bytes as input
-                # (PY2)
-                root = ElementTree.fromstring(envel.group(0).encode('utf-8'))
+                root = ElementTree.fromstring(envel.group(0))
                 if root.find('.//faultstring') is not None:
                     raise SoapFaultError(root.find('.//faultstring').text)
             else:
@@ -464,12 +457,11 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
         else:
             envel = re.search(
                 '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', wsdl_response.text, re.DOTALL)
-            # ElementTree.fromstring wants encoded bytes as input (PY2)
-            root = ElementTree.fromstring(envel.group(0).encode('utf-8'))
+            root = ElementTree.fromstring(envel.group(0))
             if root.find('.//faultstring') is not None:
                 raise SoapFaultError(root.find('.//faultstring').text)
             else:
-                raise XrdInfoError(u'WSDL not found')
+                raise XrdInfoError('WSDL not found')
     except requests.exceptions.Timeout as e:
         raise RequestTimeoutError(e)
     except Exception as e:
@@ -479,13 +471,12 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
 def wsdl_methods(wsdl_doc):
     """Return list of methods in WSDL."""
     try:
-        # ElementTree.fromstring wants encoded bytes as input (PY2)
-        root = ElementTree.fromstring(wsdl_doc.encode('utf-8'))
+        root = ElementTree.fromstring(wsdl_doc)
         for operation in root.findall('.//wsdl:binding/wsdl:operation', NS):
             version = operation.find('./xrd:version', NS).text \
                 if operation.find('./xrd:version', NS) is not None else ''
             if 'name' in operation.attrib:
-                yield (u'' + operation.attrib['name'], u'' + version)
+                yield ('' + operation.attrib['name'], '' + version)
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -494,4 +485,4 @@ def stringify(items):
     """Convert list/tuple to slash separated string representation of
     identifier.
     """
-    return u'/'.join(items)
+    return '/'.join(items)
