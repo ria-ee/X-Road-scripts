@@ -33,9 +33,11 @@ There are also some scripts that use xrdinfo module:
 * [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of
   the X-Road request) methods (services) in X-Road instance.
-* [xrd_all_wsdls.py](xrdinfo/xrd_all_wsdls.py) - Downloads all WSDL
-  documents of specified X-Road instance and creates an index for these
-  WSDL's.
+* xrd_all_wsdls.py - Downloads all WSDL documents of specified X-Road
+  instance and creates an index for these WSDL's. This functionality
+  was moved to repositories:
+  * https://koodivaramu.eesti.ee/x-tee/x-road-catalogue-collector
+  * https://koodivaramu.eesti.ee/x-tee/x-road-catalogue
 * [xrd_methods.py](xrdinfo/xrd_methods.py) - Returns the list of methods
   provided or allowed by a specified X-Road Member.
 * [xrd_registered_subsystems.py](xrdinfo/xrd_registered_subsystems.py) -
