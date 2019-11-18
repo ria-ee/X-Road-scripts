@@ -76,7 +76,7 @@ def main():
 
     try:
         for subsystem in xrdinfo.registered_subsystems(shared_params):
-            line = xrdinfo.stringify(subsystem)
+            line = xrdinfo.identifier(subsystem)
             print(line)
     except xrdinfo.XrdInfoError as e:
         print_error(e)

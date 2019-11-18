@@ -31,10 +31,14 @@ and used in any Python3 application. It implements:
 * loading of global configuration from Security Server, Central Server
   or Configuration Proxy;
 * parsing of shared_params.xml;
-* listMethods and allowedMethods X-Road requests;
+* listMethods and allowedMethods X-Road requests for SOAP;
+* listMethods and allowedMethods X-Road requests for REST;
 * getWsdl X-Road request.
+* getOpenApi X-Road request.
 
-There are also some scripts that use xrdinfo module:
+There are also some scripts that use xrdinfo module. Note that output
+identifiers consist of slash separated Percent-Encoded parts to be
+compatible with X-Road REST identifiers:
 * [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of
   the X-Road request) methods (services) in X-Road instance.

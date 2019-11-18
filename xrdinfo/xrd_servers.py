@@ -76,7 +76,7 @@ def main():
 
     try:
         for server in xrdinfo.servers(shared_params):
-            line = xrdinfo.stringify(server)
+            line = xrdinfo.identifier(server)
             print(line)
     except xrdinfo.XrdInfoError as e:
         print_error(e)

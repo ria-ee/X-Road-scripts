@@ -5,19 +5,22 @@
 __all__ = [
     'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'shared_params_ss',
     'shared_params_cs', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
-    'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'wsdl',
-    'wsdl_methods', 'stringify']
+    'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
+    'wsdl', 'wsdl_methods', 'openapi', 'identifier', 'identifier_parts']
 __version__ = '1.0'
 __author__ = 'Vitali Stupin'
 
+import json
 import re
-import requests
 import socket
 import urllib.parse as urlparse
 import uuid
-import xml.etree.ElementTree as ElementTree
 import zipfile
+import xml.etree.ElementTree as ElementTree
 from io import BytesIO
+import requests
+
+XRD_REST_VERSION = 'r1'
 
 # Timeout for requests
 DEFAULT_TIMEOUT = 5.0
@@ -404,6 +407,48 @@ def methods(
         raise XrdInfoError(e)
 
 
+def methods_rest(
+        addr, client, producer, method='listMethods', timeout=DEFAULT_TIMEOUT, verify=False,
+        cert=None):
+    """Get X-Road listMethods or allowedMethods response.
+    Return tuple: (xRoadInstance, memberClass, memberCode,
+    subsystemCode, serviceCode, serviceVersion).
+    """
+    url = addr
+    # Add HTTP/HTTPS scheme if missing
+    if not urlparse.urlsplit(url).scheme and (verify or cert):
+        url = 'https://' + url
+    elif not urlparse.urlsplit(url).scheme:
+        url = 'http://' + url
+
+    if (len(client) == 3 or client[3] == '') and len(producer) == 4:
+        client_header = identifier(client[:3])
+    elif len(client) == 4 and len(producer) == 4:
+        client_header = identifier(client[:4])
+    else:
+        return
+    # "producer" length already checked
+    url = urlparse.urljoin(url, '/{}/{}/{}'.format(XRD_REST_VERSION, identifier(producer), method))
+
+    headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
+    try:
+        methods_response = requests.get(
+            url, headers=headers, timeout=timeout, verify=verify, cert=cert)
+        methods_response.raise_for_status()
+        methods_response.encoding = 'utf-8'
+
+        services = json.loads(methods_response.text)
+
+        for service in services['service']:
+            yield (service['xroad_instance'], service['member_class'], service['member_code'],
+                   service['subsystem_code'], service['service_code'])
+
+    except requests.exceptions.Timeout as e:
+        raise RequestTimeoutError(e)
+    except Exception as e:
+        raise XrdInfoError(e)
+
+
 def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
     """Get X-Road getWsdl response."""
     url = addr
@@ -481,8 +526,50 @@ def wsdl_methods(wsdl_doc):
         raise XrdInfoError(e)
 
 
-def stringify(items):
+def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+    """Get X-Road getOpenAPI response."""
+    url = addr
+    # Add HTTP/HTTPS scheme if missing
+    if not urlparse.urlsplit(url).scheme and (verify or cert):
+        url = 'https://' + url
+    elif not urlparse.urlsplit(url).scheme:
+        url = 'http://' + url
+
+    if (len(client) == 3 or client[3] == '') and len(service) == 5:
+        client_header = identifier(client[:3])
+    elif len(client) == 4 and len(service) == 5:
+        client_header = identifier(client[:4])
+    else:
+        return
+    # "producer" length already checked
+    url = urlparse.urljoin(url, '/{}/{}/getOpenAPI?serviceCode={}'.format(
+        XRD_REST_VERSION, identifier(service[:4]), encode_part(service[4])))
+
+    headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
+    try:
+        openapi_response = requests.get(
+            url, headers=headers, timeout=timeout, verify=verify, cert=cert)
+        openapi_response.raise_for_status()
+        openapi_response.encoding = 'utf-8'
+        return openapi_response.text
+    except requests.exceptions.Timeout as e:
+        raise RequestTimeoutError(e)
+    except Exception as e:
+        raise XrdInfoError(e)
+
+
+def encode_part(part):
+    """Percent-Encode identifier part."""
+    return urlparse.quote(part, safe='')
+
+
+def identifier(items):
     """Convert list/tuple to slash separated string representation of
-    identifier.
+    identifier. Each identifier part is Percent-Encoded.
     """
-    return '/'.join(items)
+    return '/'.join(map(encode_part, items))
+
+
+def identifier_parts(ident_str):
+    """Convert identifier to list of parts."""
+    return list(map(urlparse.unquote, ident_str.split('/')))

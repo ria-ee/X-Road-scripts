@@ -16,7 +16,7 @@ def print_error(content):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='X-Road getWsdl request.',
+        description='X-Road getOpenApi request.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='By default peer TLS certificate is not validated.'
     )
@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         'service', metavar='SERVICE',
         help='Service identifier consisting of slash separated Percent-Encoded parts (e.g. '
-             '"INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE/SERVICE_CODE/SERVICE_VERSION").')
+             '"INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE/SERVICE_CODE").')
     parser.add_argument('-t', metavar='TIMEOUT', help='timeout for HTTP query', type=float)
     parser.add_argument(
         '--verify', metavar='CERT_PATH',
@@ -39,8 +39,6 @@ def main():
     parser.add_argument(
         '--cert', metavar='CERT_PATH', help='use TLS certificate for HTTPS requests.')
     parser.add_argument('--key', metavar='KEY_PATH', help='private key for TLS certificate.')
-    parser.add_argument(
-        '--methods', help='return only method names instead of WSDL', action='store_true')
     args = parser.parse_args()
 
     timeout = DEFAULT_TIMEOUT
@@ -61,21 +59,15 @@ def main():
         exit(1)
 
     service = xrdinfo.identifier_parts(args.service)
-    if len(service) == 5:
-        service.append('')
-    if not (len(service) == 6):
+    if not (len(service) == 5):
         print_error('Service name is incorrect: "{}"'.format(args.service))
         exit(1)
 
     try:
-        wsdl = xrdinfo.wsdl(
+        openapi = xrdinfo.openapi(
             addr=args.url, client=client, service=service, timeout=timeout, verify=verify,
             cert=cert)
-        if args.methods:
-            for method in xrdinfo.wsdl_methods(wsdl):
-                print(xrdinfo.identifier(method))
-        else:
-            print(wsdl)
+        print(openapi)
     except xrdinfo.XrdInfoError as e:
         print_error(e)
         exit(1)

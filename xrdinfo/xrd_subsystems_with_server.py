@@ -76,7 +76,7 @@ def main():
 
     try:
         for subsystem in xrdinfo.subsystems_with_server(shared_params):
-            line = xrdinfo.stringify(subsystem)
+            line = xrdinfo.identifier(subsystem)
             if len(subsystem) == 4:
                 # No server found
                 line = "{} NOSERVER".format(line)

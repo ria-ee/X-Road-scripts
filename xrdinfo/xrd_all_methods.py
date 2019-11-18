@@ -34,13 +34,23 @@ def worker(params):
             else:
                 continue
         try:
-            for method in xrdinfo.methods(
-                    addr=params['url'], client=params['client'], producer=subsystem,
-                    method=params['method'], timeout=params['timeout'], verify=params['verify'],
-                    cert=params['cert']):
-                line = xrdinfo.stringify(method) + '\n'
-                # Using thread safe "write" instead of "print"
-                sys.stdout.write(line)
+            if params['rest']:
+                for method in xrdinfo.methods_rest(
+                        addr=params['url'], client=params['client'], producer=subsystem,
+                        method=params['method'], timeout=params['timeout'], verify=params['verify'],
+                        cert=params['cert']):
+                    line = xrdinfo.identifier(method) + '\n'
+                    # Using thread safe "write" instead of "print"
+                    sys.stdout.write(line)
+            else:
+                for method in xrdinfo.methods(
+                        addr=params['url'], client=params['client'], producer=subsystem,
+                        method=params['method'], timeout=params['timeout'],
+                        verify=params['verify'],
+                        cert=params['cert']):
+                    line = xrdinfo.identifier(method) + '\n'
+                    # Using thread safe "write" instead of "print"
+                    sys.stdout.write(line)
         except Exception as e:
             print_error('{}: {}'.format(type(e).__name__, e))
         finally:
@@ -58,11 +68,12 @@ def main():
         help='URL of local Security Server accepting X-Road requests.')
     parser.add_argument(
         'client', metavar='CLIENT',
-        help='slash separated Client identifier (e.g. '
+        help='Client identifier consisting of slash separated Percent-Encoded parts (e.g. '
              '"INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE" '
              'or "INSTANCE/MEMBER_CLASS/MEMBER_CODE").')
     parser.add_argument('-t', metavar='TIMEOUT', help='timeout for HTTP query', type=float)
     parser.add_argument('--allowed', help='return only allowed methods', action='store_true')
+    parser.add_argument('--rest', help='return REST methods instead of SOAP', action='store_true')
     parser.add_argument('--threads', metavar='THREADS', help='amount of threads to use', type=int)
     parser.add_argument(
         '--verify', metavar='CERT_PATH',
@@ -77,18 +88,18 @@ def main():
 
     params = {
         'url': args.url,
-        'client': args.client,
+        'client': xrdinfo.identifier_parts(args.client),
         'method': DEFAULT_METHOD,
         'instance': None,
         'timeout': DEFAULT_TIMEOUT,
         'verify': False,
         'cert': None,
+        'rest': args.rest,
         'thread_cnt': DEFAULT_THREAD_COUNT,
         'work_queue': queue.Queue(),
         'shutdown': Event()
     }
 
-    params['client'] = params['client'].split('/')
     if not (len(params['client']) in (3, 4)):
         print_error('Client name is incorrect: "{}"'.format(args.client))
         exit(1)
