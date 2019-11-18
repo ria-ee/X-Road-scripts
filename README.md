@@ -69,6 +69,8 @@ compatible with X-Road REST identifiers:
   X-Road request. This script can be useful when
   http://SECURITYSERVER/wsdl service is disabled or TLS authentication
   is required to access Security Server.
+* [xrd_openapi.py](xrdinfo/xrd_openapi.py) - Returns the service OpenAPI
+  description using X-Road request.
 
 ## Health and Environment monitoring
 [metrics.py](zabbix/metrics.py) - X-Road Health and Environment
