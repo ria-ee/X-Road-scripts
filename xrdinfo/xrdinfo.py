@@ -8,7 +8,7 @@ __all__ = [
     'subsystems_with_membername', 'registered_subsystems', 'subsystems_with_server', 'servers',
     'addr_ips', 'servers_ips', 'methods', 'methods_rest', 'wsdl', 'wsdl_methods', 'openapi',
     'openapi_endpoints', 'identifier', 'identifier_parts']
-__version__ = '1.0'
+__version__ = '1.1'
 __author__ = 'Vitali Stupin'
 
 import json
