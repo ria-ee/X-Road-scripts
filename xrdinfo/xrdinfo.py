@@ -209,7 +209,7 @@ def subsystems(shared_params):
             member_code = '' + member.find('./memberCode').text
             for subsystem in member.findall('./subsystem'):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
-                yield (instance, member_class, member_code, subsystem_code)
+                yield instance, member_class, member_code, subsystem_code
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -228,7 +228,7 @@ def subsystems_with_membername(shared_params):
             member_name = '' + member.find('./name').text
             for subsystem in member.findall('./subsystem'):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
-                yield (instance, member_class, member_code, subsystem_code, member_name)
+                yield instance, member_class, member_code, subsystem_code, member_name
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -249,7 +249,7 @@ def registered_subsystems(shared_params):
                 subsystem_id = subsystem.attrib['id']
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 if root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
-                    yield (instance, member_class, member_code, subsystem_code)
+                    yield instance, member_class, member_code, subsystem_code
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -287,7 +287,7 @@ def subsystems_with_server(shared_params):
                         owner_code, server_code, address)
                     server_found = True
                 if not server_found:
-                    yield (instance, member_class, member_code, subsystem_code)
+                    yield instance, member_class, member_code, subsystem_code
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -308,7 +308,7 @@ def servers(shared_params):
             member_code = '' + owner.find('./memberCode').text
             server_code = '' + server.find('./serverCode').text
             address = '' + server.find('./address').text
-            yield (instance, member_class, member_code, server_code, address)
+            yield instance, member_class, member_code, server_code, address
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -319,7 +319,7 @@ def addr_ips(address):
     """
     try:
         for ip in socket.gethostbyname_ex(address)[2]:
-            yield ('' + ip)
+            yield '' + ip
     except socket.gaierror:
         # Ignoring DNS name not found error
         pass
@@ -336,7 +336,7 @@ def servers_ips(shared_params):
         for server in root.findall('./securityServer'):
             address = server.find('address').text
             for ip in addr_ips(address):
-                yield ('' + ip)
+                yield '' + ip
     except Exception as e:
         raise XrdInfoError(e)
 
@@ -521,7 +521,7 @@ def wsdl_methods(wsdl_doc):
             version = operation.find('./xrd:version', NS).text \
                 if operation.find('./xrd:version', NS) is not None else ''
             if 'name' in operation.attrib:
-                yield ('' + operation.attrib['name'], '' + version)
+                yield '' + operation.attrib['name'], '' + version
     except Exception as e:
         raise XrdInfoError(e)
 
