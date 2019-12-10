@@ -588,9 +588,8 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
 
 def openapi_endpoints(openapi_doc):
     """Return list of endpoints in OpenAPI."""
-    data = {}
     try:
-        data = yaml.load(openapi_doc, Loader=yaml.FullLoader)
+        data = yaml.load(openapi_doc, Loader=yaml.SafeLoader)
     except yaml.YAMLError:
         try:
             data = json.loads(openapi_doc)
