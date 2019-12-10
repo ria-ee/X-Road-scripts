@@ -7,7 +7,7 @@ __all__ = [
     'OpenapiReadError', 'shared_params_ss', 'shared_params_cs', 'subsystems',
     'subsystems_with_membername', 'registered_subsystems', 'subsystems_with_server', 'servers',
     'addr_ips', 'servers_ips', 'methods', 'methods_rest', 'wsdl', 'wsdl_methods', 'openapi',
-    'identifier', 'identifier_parts']
+    'openapi_endpoints', 'identifier', 'identifier_parts']
 __version__ = '1.0'
 __author__ = 'Vitali Stupin'
 
@@ -20,6 +20,7 @@ import zipfile
 import xml.etree.ElementTree as ElementTree
 from io import BytesIO
 import requests
+import yaml
 
 XRD_REST_VERSION = 'r1'
 
@@ -583,6 +584,30 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
             raise OpenapiReadError('Failed reading service OpenAPI description')
         else:
             raise XrdInfoError(e)
+
+
+def openapi_endpoints(openapi_doc):
+    """Return list of endpoints in OpenAPI."""
+    data = {}
+    try:
+        data = yaml.load(openapi_doc, Loader=yaml.FullLoader)
+    except yaml.YAMLError:
+        try:
+            data = json.loads(openapi_doc)
+        except json.JSONDecodeError:
+            raise XrdInfoError('Can not parse OpenAPI description')
+
+    results = []
+    try:
+        for path, operations in data['paths'].items():
+            for verb, operation in operations.items():
+                results.append({
+                    'verb': verb, 'path': path, 'summary': operation.get('summary', ''),
+                    'description': operation.get('description', '')})
+    except Exception:
+        raise XrdInfoError('Endpoints not found')
+
+    return results
 
 
 def encode_part(part):

@@ -2,3 +2,4 @@ six
 py-zabbix
 requests
 psycopg2
+pyyaml==5.2

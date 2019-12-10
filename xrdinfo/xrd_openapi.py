@@ -3,6 +3,7 @@
 import argparse
 import xrdinfo
 import sys
+import json
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT = 5.0
@@ -33,6 +34,7 @@ def main():
         help='Service identifier consisting of slash separated Percent-Encoded parts (e.g. '
              '"INSTANCE/MEMBER_CLASS/MEMBER_CODE/SUBSYSTEM_CODE/SERVICE_CODE").')
     parser.add_argument('-t', metavar='TIMEOUT', help='timeout for HTTP query', type=float)
+    parser.add_argument('--endpoints', help='return only service endpoints', action='store_true')
     parser.add_argument(
         '--verify', metavar='CERT_PATH',
         help='validate peer TLS certificate using CA certificate file.')
@@ -67,7 +69,10 @@ def main():
         openapi = xrdinfo.openapi(
             addr=args.url, client=client, service=service, timeout=timeout, verify=verify,
             cert=cert)
-        print(openapi)
+        if args.endpoints:
+            print(json.dumps(xrdinfo.openapi_endpoints(openapi), indent=2, ensure_ascii=False))
+        else:
+            print(openapi)
     except xrdinfo.XrdInfoError as e:
         print_error(e)
         exit(1)
