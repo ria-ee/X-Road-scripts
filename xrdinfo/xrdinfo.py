@@ -3,10 +3,11 @@
 """X-Road informational module."""
 
 __all__ = [
-    'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'shared_params_ss',
-    'shared_params_cs', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
-    'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
-    'wsdl', 'wsdl_methods', 'openapi', 'identifier', 'identifier_parts']
+    'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'NotOpenapiServiceError',
+    'OpenapiReadError', 'shared_params_ss', 'shared_params_cs', 'subsystems',
+    'subsystems_with_membername', 'registered_subsystems', 'subsystems_with_server', 'servers',
+    'addr_ips', 'servers_ips', 'methods', 'methods_rest', 'wsdl', 'wsdl_methods', 'openapi',
+    'identifier', 'identifier_parts']
 __version__ = '1.0'
 __author__ = 'Vitali Stupin'
 
@@ -124,6 +125,16 @@ class SoapFaultError(XrdInfoError):
 
     def __init__(self, msg):
         super(SoapFaultError, self).__init__('SoapFault: {}'.format(msg))
+
+
+class NotOpenapiServiceError(XrdInfoError):
+    """Requested service does not have OpenAPI description."""
+    pass
+
+
+class OpenapiReadError(XrdInfoError):
+    """Producer Security Server failed to read OpenAPI description."""
+    pass
 
 
 def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -546,6 +557,7 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
         XRD_REST_VERSION, identifier(service[:4]), encode_part(service[4])))
 
     headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
+    openapi_response = None
     try:
         openapi_response = requests.get(
             url, headers=headers, timeout=timeout, verify=verify, cert=cert)
@@ -555,7 +567,22 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
     except requests.exceptions.Timeout as e:
         raise RequestTimeoutError(e)
     except Exception as e:
-        raise XrdInfoError(e)
+        error_type = ''
+        try:
+            resp = json.loads(openapi_response.text)
+            if resp['message'] == 'Invalid service type: REST':
+                error_type = 'not_openapi'
+            elif re.search('^Failed reading service description from', resp['message']):
+                error_type = 'openapi_failed'
+        except (AttributeError, ValueError, KeyError):
+            # Failed to find precise error.
+            pass
+        if error_type == 'not_openapi':
+            raise NotOpenapiServiceError('Service does not have OpenAPI description')
+        if error_type == 'openapi_failed':
+            raise OpenapiReadError('Failed reading service OpenAPI description')
+        else:
+            raise XrdInfoError(e)
 
 
 def encode_part(part):
