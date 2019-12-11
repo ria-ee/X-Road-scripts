@@ -424,7 +424,7 @@ def methods_rest(
         cert=None):
     """Get X-Road listMethods or allowedMethods response.
     Return tuple: (xRoadInstance, memberClass, memberCode,
-    subsystemCode, serviceCode, serviceVersion).
+    subsystemCode, serviceCode).
     """
     url = addr
     # Add HTTP/HTTPS scheme if missing
