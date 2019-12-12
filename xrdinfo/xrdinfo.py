@@ -118,7 +118,6 @@ class XrdInfoError(Exception):
 
 class RequestTimeoutError(XrdInfoError):
     """Request failed due to timeout."""
-    pass
 
 
 class SoapFaultError(XrdInfoError):
@@ -130,12 +129,24 @@ class SoapFaultError(XrdInfoError):
 
 class NotOpenapiServiceError(XrdInfoError):
     """Requested service does not have OpenAPI description."""
-    pass
 
 
 class OpenapiReadError(XrdInfoError):
     """Producer Security Server failed to read OpenAPI description."""
-    pass
+
+
+def raise_rest_exception(err, response):
+    """Raises more precise exception for REST services"""
+    try:
+        resp = json.loads(response.text)
+        if resp['message'] == 'Invalid service type: REST':
+            raise NotOpenapiServiceError('Service does not have OpenAPI description')
+        if re.search('^Failed reading service description from', resp['message']):
+            raise OpenapiReadError('Failed reading service OpenAPI description')
+        raise XrdInfoError('RestError: {}: {}'.format(resp['type'], resp['message']))
+    except (AttributeError, json.JSONDecodeError, KeyError):
+        # Failed to find precise error.
+        raise XrdInfoError(err)
 
 
 def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -169,10 +180,10 @@ def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False,
             'verificationconf/{}/shared-params.xml'.format(ident))
         shared_params = shared_params_file.read()
         return shared_params.decode('utf-8')
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        raise XrdInfoError(e)
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -196,16 +207,17 @@ def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         global_conf = requests.get(url, timeout=timeout, verify=verify, cert=cert)
         global_conf.raise_for_status()
         # Configuration Proxy uses lowercase for 'Content-location'
-        s = re.search('Content-location: (/.+/shared-params.xml)', global_conf.text, re.IGNORECASE)
-        url2 = urlparse.urljoin(url, s.group(1))
+        search_res = re.search(
+            'Content-location: (/.+/shared-params.xml)', global_conf.text, re.IGNORECASE)
+        url2 = urlparse.urljoin(url, search_res.group(1))
         shared_params_response = requests.get(url2, timeout=timeout, verify=verify, cert=cert)
         shared_params_response.raise_for_status()
         shared_params_response.encoding = 'utf-8'
         return shared_params_response.text
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        raise XrdInfoError(e)
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def subsystems(shared_params):
@@ -222,8 +234,8 @@ def subsystems(shared_params):
             for subsystem in member.findall('./subsystem'):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield instance, member_class, member_code, subsystem_code
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def subsystems_with_membername(shared_params):
@@ -241,8 +253,8 @@ def subsystems_with_membername(shared_params):
             for subsystem in member.findall('./subsystem'):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield instance, member_class, member_code, subsystem_code, member_name
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def registered_subsystems(shared_params):
@@ -262,8 +274,8 @@ def registered_subsystems(shared_params):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 if root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
                     yield instance, member_class, member_code, subsystem_code
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def subsystems_with_server(shared_params):
@@ -300,8 +312,8 @@ def subsystems_with_server(shared_params):
                     server_found = True
                 if not server_found:
                     yield instance, member_class, member_code, subsystem_code
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def servers(shared_params):
@@ -321,8 +333,8 @@ def servers(shared_params):
             server_code = '' + server.find('./serverCode').text
             address = '' + server.find('./address').text
             yield instance, member_class, member_code, server_code, address
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def addr_ips(address):
@@ -330,13 +342,13 @@ def addr_ips(address):
     Unresolved DNS names are silently ignored.
     """
     try:
-        for ip in socket.gethostbyname_ex(address)[2]:
-            yield '' + ip
+        for ip_address in socket.gethostbyname_ex(address)[2]:
+            yield '' + ip_address
     except socket.gaierror:
         # Ignoring DNS name not found error
         pass
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def servers_ips(shared_params):
@@ -347,10 +359,10 @@ def servers_ips(shared_params):
         root = ElementTree.fromstring(shared_params)
         for server in root.findall('./securityServer'):
             address = server.find('address').text
-            for ip in addr_ips(address):
-                yield '' + ip
-    except Exception as e:
-        raise XrdInfoError(e)
+            for ip_address in addr_ips(address):
+                yield '' + ip_address
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def methods(
@@ -413,10 +425,10 @@ def methods(
                     else ''}
             yield (result['xRoadInstance'], result['memberClass'], result['memberCode'],
                    result['subsystemCode'], result['serviceCode'], result['serviceVersion'])
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        raise XrdInfoError(e)
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def methods_rest(
@@ -443,6 +455,7 @@ def methods_rest(
     url = urlparse.urljoin(url, '/{}/{}/{}'.format(XRD_REST_VERSION, identifier(producer), method))
 
     headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
+    methods_response = None
     try:
         methods_response = requests.get(
             url, headers=headers, timeout=timeout, verify=verify, cert=cert)
@@ -455,10 +468,10 @@ def methods_rest(
             yield (service['xroad_instance'], service['member_class'], service['member_code'],
                    service['subsystem_code'], service['service_code'])
 
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        raise XrdInfoError(e)
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise_rest_exception(err, methods_response)
 
 
 def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -487,7 +500,7 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
             client=client, service=service, uuid=uuid.uuid4(), service_code=GETWSDL_SERVICE_CODE,
             body=body)
     else:
-        return
+        return None
 
     headers = {'content-type': 'text/xml'}
     try:
@@ -511,18 +524,17 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
                     raise SoapFaultError(root.find('.//faultstring').text)
             else:
                 return resp.group(1)
-        else:
-            envel = re.search(
-                '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', wsdl_response.text, re.DOTALL)
-            root = ElementTree.fromstring(envel.group(0))
-            if root.find('.//faultstring') is not None:
-                raise SoapFaultError(root.find('.//faultstring').text)
-            else:
-                raise XrdInfoError('WSDL not found')
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        raise XrdInfoError(e)
+
+        envel = re.search(
+            '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', wsdl_response.text, re.DOTALL)
+        root = ElementTree.fromstring(envel.group(0))
+        if root.find('.//faultstring') is not None:
+            raise SoapFaultError(root.find('.//faultstring').text)
+        raise XrdInfoError('WSDL not found')
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def wsdl_methods(wsdl_doc):
@@ -534,8 +546,8 @@ def wsdl_methods(wsdl_doc):
                 if operation.find('./xrd:version', NS) is not None else ''
             if 'name' in operation.attrib:
                 yield '' + operation.attrib['name'], '' + version
-    except Exception as e:
-        raise XrdInfoError(e)
+    except Exception as err:
+        raise XrdInfoError(err)
 
 
 def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -552,7 +564,7 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
     elif len(client) == 4 and len(service) == 5:
         client_header = identifier(client[:4])
     else:
-        return
+        return None
     # "producer" length already checked
     url = urlparse.urljoin(url, '/{}/{}/getOpenAPI?serviceCode={}'.format(
         XRD_REST_VERSION, identifier(service[:4]), encode_part(service[4])))
@@ -565,36 +577,31 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
         openapi_response.raise_for_status()
         openapi_response.encoding = 'utf-8'
         return openapi_response.text
-    except requests.exceptions.Timeout as e:
-        raise RequestTimeoutError(e)
-    except Exception as e:
-        error_type = ''
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err)
+    except Exception as err:
+        raise_rest_exception(err, openapi_response)
+
+
+def load_openapi(openapi_doc):
+    """Load OpenAPI description into Python object.
+    Return tuple: (data, document_type).
+    """
+    try:
+        # Checking JSON first, because YAML is a superset of JSON
+        data = json.loads(openapi_doc)
+        return data, 'json'
+    except json.JSONDecodeError:
         try:
-            resp = json.loads(openapi_response.text)
-            if resp['message'] == 'Invalid service type: REST':
-                error_type = 'not_openapi'
-            elif re.search('^Failed reading service description from', resp['message']):
-                error_type = 'openapi_failed'
-        except (AttributeError, ValueError, KeyError):
-            # Failed to find precise error.
-            pass
-        if error_type == 'not_openapi':
-            raise NotOpenapiServiceError('Service does not have OpenAPI description')
-        if error_type == 'openapi_failed':
-            raise OpenapiReadError('Failed reading service OpenAPI description')
-        else:
-            raise XrdInfoError(e)
+            data = yaml.load(openapi_doc, Loader=yaml.SafeLoader)
+            return data, 'yaml'
+        except yaml.YAMLError:
+            raise XrdInfoError('Can not parse OpenAPI description')
 
 
 def openapi_endpoints(openapi_doc):
     """Return list of endpoints in OpenAPI."""
-    try:
-        data = yaml.load(openapi_doc, Loader=yaml.SafeLoader)
-    except yaml.YAMLError:
-        try:
-            data = json.loads(openapi_doc)
-        except json.JSONDecodeError:
-            raise XrdInfoError('Can not parse OpenAPI description')
+    data, _ = load_openapi(openapi_doc)
 
     results = []
     try:
@@ -604,6 +611,10 @@ def openapi_endpoints(openapi_doc):
                     'verb': verb, 'path': path, 'summary': operation.get('summary', ''),
                     'description': operation.get('description', '')})
     except Exception:
+        raise XrdInfoError('Endpoints not found')
+
+    if not results:
+        # OpenAPI without endpoints is not considered valid
         raise XrdInfoError('Endpoints not found')
 
     return results
