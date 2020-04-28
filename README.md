@@ -59,6 +59,8 @@ compatible with X-Road REST identifiers:
   Security Servers in X-Road instance.
 * [xrd_subsystems.py](xrdinfo/xrd_subsystems.py) - Returns the list of
   all Subsystems in X-Road instance.
+* [xrd_members.py](xrdinfo/xrd_members.py) - Returns the list of
+  all Members in X-Road instance.
 * [xrd_subsystems_with_membername.py](xrdinfo/xrd_subsystems_with_membername.py) -
   Returns the list of all Subsystems in X-Road instance and additionally
   adding Member names to that list.

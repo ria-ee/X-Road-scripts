@@ -220,6 +220,21 @@ def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         raise XrdInfoError(err)
 
 
+def members(shared_params):
+    """List Members in shared_params.
+    Return tuple: (xRoadInstance, memberClass, memberCode).
+    """
+    try:
+        root = ElementTree.fromstring(shared_params)
+        instance = '' + root.find('./instanceIdentifier').text
+        for member in root.findall('./member'):
+            member_class = '' + member.find('./memberClass/code').text
+            member_code = '' + member.find('./memberCode').text
+            yield instance, member_class, member_code
+    except Exception as err:
+        raise XrdInfoError(err)
+
+
 def subsystems(shared_params):
     """List Subsystems in shared_params.
     Return tuple: (xRoadInstance, memberClass, memberCode,
