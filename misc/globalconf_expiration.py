@@ -50,13 +50,18 @@ for item in os.walk(globalconf_path):
             with open('{}/{}'.format(path, fileName), 'r') as f:
                 data = json.load(f)
                 if data and 'expirationDate' in data:
-                    # Example: expirationDate = 2017-12-12T10:02:02.000+02:00
                     expiration = data['expirationDate']
-                    t = time.strptime(expiration[:-10], '%Y-%m-%dT%H:%M:%S')
+                    try:
+                        # Example: expirationDate = 2017-12-12T10:02:02.000+02:00
+                        t = time.strptime(expiration[:-10], '%Y-%m-%dT%H:%M:%S')
 
-                    # convert local time to UTC
-                    epoch = calendar.timegm(t) + time.timezone
-                    t = time.gmtime(epoch)
+                        # convert local time to UTC
+                        epoch = calendar.timegm(t) + time.timezone
+                        t = time.gmtime(epoch)
+                    except ValueError:
+                        # Example (6.25+): expirationDate = 2017-12-12T10:02:02Z
+                        t = time.strptime(expiration, '%Y-%m-%dT%H:%M:%SZ')
+
                     expiration = time.strftime('%Y-%m-%d %H:%M:%S', t)
 
                     s = re.search('^(.+).metadata$', fileName)
