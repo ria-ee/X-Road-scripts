@@ -103,8 +103,9 @@ Environment monitoring is using Zabbix template
 [envmon_template.xml](zabbix/envmon_template.xml) that should be
 imported into Zabbix prior to execution of the collector.
 
-Collector requires [py-zabbix](https://github.com/adubkov/py-zabbix)
-package (tested with version 1.1.3) which can be installed with:
+Collector requires [py-zabbix](https://github.com/adubkov/py-zabbix) package
+(tested with version 1.1.3 for Zabbix 3 and version 1.1.7 for Zabbix 4)
+which can be installed with:
 ```
 sudo pip install py-zabbix
 ```
