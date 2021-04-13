@@ -11,7 +11,10 @@
 debug = 1
 
 # Zabbix configuration
+# Hostname + port of Zabbix API
 zabbix_url = https://myzabbix.server/
+# Zabbix sender port (hostname will be taken from "zabbix_url")
+zabbix_sender_port = 10051
 zabbix_user = ZABBIX_USER
 zabbix_pass = ZABBIX_PASS
 
