@@ -4,7 +4,7 @@
 
 __all__ = [
     'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'NotOpenapiServiceError',
-    'OpenapiReadError', 'shared_params_ss', 'shared_params_cs', 'subsystems',
+    'OpenapiReadError', 'shared_params_ss', 'shared_params_cs', 'members', 'subsystems',
     'subsystems_with_membername', 'registered_subsystems', 'subsystems_with_server', 'servers',
     'addr_ips', 'servers_ips', 'methods', 'methods_rest', 'wsdl', 'wsdl_methods', 'openapi',
     'openapi_endpoints', 'identifier', 'identifier_parts']
