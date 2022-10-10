@@ -622,9 +622,10 @@ def openapi_endpoints(openapi_doc):
     try:
         for path, operations in data['paths'].items():
             for verb, operation in operations.items():
-                results.append({
-                    'verb': verb, 'path': path, 'summary': operation.get('summary', ''),
-                    'description': operation.get('description', '')})
+                if (verb in ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']):
+                    results.append({
+                        'verb': verb, 'path': path, 'summary': operation.get('summary', ''),
+                        'description': operation.get('description', '')})
     except Exception:
         raise XrdInfoError('Endpoints not found')
 
