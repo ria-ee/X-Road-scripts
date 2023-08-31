@@ -444,7 +444,6 @@ def get_host(params, host_name):
             output=['hostid', 'host', 'name', 'status'],
             selectItems=['key_'],
             selectParentTemplates=['templateid'],
-            selectApplications=['name', 'applicationid'],
         )
         if not host:
             return None
@@ -503,70 +502,21 @@ def check_host(params, host_name, host_visible_name):
     return host_data
 
 
-def add_app(params, host_id, app):
-    """Add Application to Zabbix."""
-    try:
-        result = params['zapi'].application.create(
-            hostid=host_id,
-            name=app,
-        )
-        return result['applicationids']
-    except Exception as e:
-        if params['debug'] > 1:
-            print_debug(u"add_app: {}".format(e))
-        return None
-
-
-def check_app(params, host_id, host_apps, app):
-    """Check if Application is already added to the host, and add that
-    application if necessary.
-    Return updated dict host_apps.
-    """
-    if app not in host_apps.keys():
-        if params['debug']:
-            print_debug(u"Adding Application: '{}' for host_id '{}'.".format(app, host_id))
-        result = add_app(params, host_id, app)
-        try:
-            host_apps[app] = result[0]
-        except Exception as e:
-            if params['debug'] > 1:
-                print_debug(u"addHostApp: {}".format(e))
-            return None
-    return host_apps
-
-
-def add_item(params, host_id, item, app):
+def add_item(params, host_id, item, tag):
     """Add Item to Zabbix."""
     try:
-        apps = []
-        if app:
-            apps = [app]
-        if params['api_client_version'] == '1':
-            result = params['zapi'].item.create(
-                hostid=host_id,
-                name=item['name'] if 'name' in item else item['key'],
-                key_=item['key'],
-                type=params['zabbix_trapper_type'],
-                value_type=item['type'],
-                units=item['units'],
-                history=item['history'],
-                description=item['description'],
-                applications=apps,
-            )
-        else:
-            # api_client_version=2 --> Zabbix version 3.4+
-            result = params['zapi'].item.create(
-                hostid=host_id,
-                name=item['name'] if 'name' in item else item['key'],
-                key_=item['key'],
-                type=params['zabbix_trapper_type'],
-                trapper_hosts='0.0.0.0/0',
-                value_type=item['type'],
-                units=item['units'],
-                history=item['history']+'d',
-                description=item['description'],
-                applications=apps,
-            )
+        result = params['zapi'].item.create(
+            hostid=host_id,
+            name=item['name'] if 'name' in item else item['key'],
+            key_=item['key'],
+            type=params['zabbix_trapper_type'],
+            trapper_hosts='0.0.0.0/0',
+            value_type=item['type'],
+            units=item['units'],
+            history=item['history']+'d',
+            description=item['description'],
+            tags=[{'tag': 'Service', 'value': tag}] if tag else [],
+        )
         return result['itemids']
     except Exception as e:
         if params['debug'] > 1:
@@ -587,7 +537,7 @@ def check_server_items(params, host_id, host_items):
     return True
 
 
-def check_service_items(params, host_id, host_items, service_name, service_key, app_id):
+def check_service_items(params, host_id, host_items, service_name, service_key):
     """Check if Service Items are already added to the Host, and adds
     missing Items.
     """
@@ -598,7 +548,7 @@ def check_service_items(params, host_id, host_items, service_name, service_key, 
         if item['key'] not in host_items:
             if params['debug']:
                 print_debug(u"Adding item: '{}' for host_id '{}'.".format(item['key'], host_id))
-            if add_item(params, host_id, item, app_id) is None:
+            if add_item(params, host_id, item, service_name) is None:
                 return None
     return True
 
@@ -775,11 +725,6 @@ def host_mon(params, server_data):
         print_error(u"Host '{}' is disabled.".format(host_name))
         return
 
-    host_apps = {}
-    # Getting dict of Applications already added to Host
-    for item in host_data['applications']:
-        host_apps[item['name']] = item['applicationid']
-
     # Getting list of Items already added to Host
     host_items = [item['key_'] for item in host_data['items']]
 
@@ -911,17 +856,9 @@ def host_mon(params, server_data):
             service_name = get_service_name(service_events.find('./om:service', NS))
             service_key = re.sub('[^0-9a-zA-Z-]+', '.', service_name)
 
-            # Check if Application is added
-            host_apps = check_app(params, host_data['hostid'], host_apps, service_name)
-            if host_apps is None:
-                print_error(
-                    u"Cannot add Application '{}' to Host '{}'!".format(service_name, host_name))
-                return
-
             # Check if Service Items are added
             if check_service_items(
-                    params, host_data['hostid'], host_items, service_name, service_key,
-                    host_apps[service_name]) is None:
+                    params, host_data['hostid'], host_items, service_name, service_key) is None:
                 print_error(u"Cannot add some of the service '{}' Items to Host '{}'!".format(
                     service_name, host_name))
                 return
@@ -955,7 +892,7 @@ def host_mon(params, server_data):
 
 def worker(params):
     while True:
-        # Checking periodically if it is the time to gracefully shutdown
+        # Checking periodically if it is the time to gracefully shut down
         # the worker.
         try:
             item = params['work_queue'].get(True, 0.1)
@@ -1014,15 +951,9 @@ def main():
         log.setLevel(logging.DEBUG)
 
     params['api_version'] = params['zapi'].api_version()
-    # api_client_version=1 --> 3.0<=Zabbix version<3.4
-    params['api_client_version'] = '1'
-    if LooseVersion(params['api_version']) >= LooseVersion('3.4'):
-        # api_client_version=2 --> 3.4<=Zabbix version
-        params['api_client_version'] = '2'
 
     if params['debug']:
-        print(u"Connected to Zabbix API version {} (using client version {})".format(
-            params['api_version'], params['api_client_version']))
+        print(u"Connected to Zabbix API version {}".format(params['api_version']))
 
     # Check if EnvMon Template exists
     if params['envmon'] and not get_template_name(
