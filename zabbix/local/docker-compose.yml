@@ -1,0 +1,78 @@
+---
+version: '3.5'
+
+name: zabbix
+
+networks:
+  zbx_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.16.238.0/24
+
+services:
+ zabbix-server:
+  image: zabbix/zabbix-server-pgsql:ubuntu-6.0-latest
+  ports:
+   - "10051:10051"
+  volumes:
+   - /etc/localtime:/etc/localtime:ro
+  environment:
+   POSTGRES_USER: zabbix
+   POSTGRES_PASSWORD: zabbix
+   POSTGRES_DB: zabbix
+  depends_on:
+   - postgres-server
+  networks:
+   zbx_net:
+  stop_grace_period: 30s
+
+ zabbix-web-nginx-pgsql:
+  image: zabbix/zabbix-web-nginx-pgsql:ubuntu-6.0-latest
+  ports:
+   - "80:8080"
+  # - "443:8443"
+  volumes:
+   - /etc/localtime:/etc/localtime:ro
+  environment:
+   POSTGRES_USER: zabbix
+   POSTGRES_PASSWORD: zabbix
+   POSTGRES_DB: zabbix
+   ZBX_SERVER_HOST: zabbix-server
+  depends_on:
+   - postgres-server
+   - zabbix-server
+  healthcheck:
+   test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+   interval: 10s
+   timeout: 5s
+   retries: 3
+   start_period: 30s
+  networks:
+   zbx_net:
+  stop_grace_period: 10s
+
+ zabbix-web-service:
+  image: zabbix/zabbix-web-service:ubuntu-6.0-latest
+  ports:
+   - "10053:10053"
+  environment:
+   ZBX_ALLOWEDIP: zabbix-server
+  networks:
+   zbx_net:
+  stop_grace_period: 5s
+
+ postgres-server:
+  image: postgres:14-alpine
+  #volumes:
+  # - ./zbx_data/var/lib/postgresql/data:/var/lib/postgresql/data:rw
+  environment:
+   POSTGRES_USER: zabbix
+   POSTGRES_PASSWORD: zabbix
+   POSTGRES_DB: zabbix
+  stop_grace_period: 1m
+  networks:
+   zbx_net:
