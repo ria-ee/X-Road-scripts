@@ -15,11 +15,11 @@ If Security Server requires TLS authentication then you can add your TLS
 certificate in Security Server administration interface:
 MEMBER/SUBSYSTEM -> Internal Servers -> INTERNAL TLS CERTIFICATES
 
-Scripts were tested with Python 3.6 (Ubuntu 18.04 LTS)
+Scripts were tested with Python 3.8 (Ubuntu 20.04 LTS)
 
 ## Messagelog:
 [cat_mlog.sh](messagelog/cat_mlog.sh) - This script prints the contents
-of archived X-Road messagelog files to STDOUT. Therefore providing a way
+of archived X-Road messagelog files to STDOUT. Therefore, providing a way
 to "grep" the contents of messagelog files.
 
 [cat_mlog_st.sh](messagelog/cat_mlog_st.sh) - Slower version of
@@ -84,11 +84,11 @@ monitoring collector for Zabbix. Can be used by:
 * X-Road members to collect other members Health data.
 
 When using MySQL as Zabbix database pay attention to Zabbix
-installation guide! You need to use **"collate utf8_bin"** database
-creation parameter because service names and versions are case sensitive
+installation guide! You need to use **"character set utf8mb4 collate utf8mb4_bin"** database
+creation parameters because service names and versions are case-sensitive
 in X-Road and "service.v1" is not equal to "Service.V1".
 
-**NB! Tested with Zabbix 3.0 LTS, 3.4 and 4.0 LTS.**
+**NB! Tested with Zabbix 6.0 LTS.**
 
 [zabbix_cron.sh](zabbix/zabbix_cron.sh) - Sample shell script that can
 be executed from crontab to periodically collect the data.
@@ -153,5 +153,5 @@ configuration parts.
 [updated_hosts.py](misc/updated_hosts.py) - Can be used to check how
 many hosts in Zabbix were updated recently. Zabbix URL and credentials
 can be passed as command line arguments or via configuration file.
-Example configutration file:
+Example configuration file:
 [updated_hosts.cfg_example](misc/updated_hosts.cfg_example).

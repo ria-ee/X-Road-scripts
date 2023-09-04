@@ -1,5 +1,0 @@
-six
-py-zabbix
-requests
-psycopg2-binary
-pyyaml

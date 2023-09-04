@@ -23,8 +23,10 @@ server_url = http://xrd0.ss.dns
 
 # Path to TLS certificate and key in case when Security Server requires
 # TLS authentication
-#tls_cert = certs/my.crt
-#tls_key = certs/my.key
+tls_cert = certs/my.pem
+tls_key = certs/my.key
+# Path to Security Server certificate CA for server certificate validation
+tls_ca = certs/ca.pem
 
 # Client subsystem/member that performs health data collection:
 monitoring_client_inst = INST

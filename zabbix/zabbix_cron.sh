@@ -19,6 +19,6 @@ else
 fi
 
 # Collecting Health data
-echo "${DATA}" | python metrics.py -c metrics.cfg
+echo "${DATA}" | python3 metrics.py -c metrics.cfg
 # Collecting Environment data
-echo "${DATA}" | python metrics.py --env -c metrics.cfg
+echo "${DATA}" | python3 metrics.py --env -c metrics.cfg
