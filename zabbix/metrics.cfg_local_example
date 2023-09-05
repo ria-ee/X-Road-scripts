@@ -25,6 +25,11 @@ envmon_template_name = X-Road Environmental monitoring
 # Security server URL used by Central monitoring:
 server_url = https://xrd1.ss.dns
 
+# Zabbix may reject metrics if they are sent to quickly after host creation or items addition
+# Sleep after host changes helps to avoid this problem
+# Sleep should be longer than Zabbix Server CacheUpdateFrequency value (default 60s)
+sleep_after_host_change = 70
+
 # Path to TLS certificate and key in case when Security Server requires
 # TLS authentication
 tls_cert = certs/my.crt

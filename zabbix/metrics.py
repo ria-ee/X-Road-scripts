@@ -36,6 +36,10 @@ DEFAULT_PARAMS = {
     # EnvMon template configuration
     'envmon_template_id': '10242',
     'envmon_template_name': 'X-Road Environmental monitoring',
+    # Zabbix may reject metrics if they are sent to quickly after host creation or items addition
+    # Sleep after host changes helps to avoid this problem
+    # Sleep should be longer than Zabbix Server CacheUpdateFrequency value (default 60s)
+    'sleep_after_host_change': 0,
     # Security server URL used by Central monitoring:
     'server_url': 'http://xrd0.ss.dns',
     # Path to TLS certificate and key in case when Security Server
@@ -350,6 +354,8 @@ def load_conf(conf_arg):
             params['envmon_template_id'] = config.get(CONF_SECTION, 'envmon_template_id')
         if 'envmon_template_name' in conf_items:
             params['envmon_template_name'] = config.get(CONF_SECTION, 'envmon_template_name')
+        if 'sleep_after_host_change' in conf_items:
+            params['sleep_after_host_change'] = int(config.get(CONF_SECTION, 'sleep_after_host_change'))
         if 'server_url' in conf_items:
             params['server_url'] = config.get(CONF_SECTION, 'server_url')
         if 'tls_cert' in conf_items:
@@ -420,6 +426,7 @@ def check_template(params, host_id, parent_templates):
                     }
                 ],
             )
+            params['host_changed'] = True
             if not result['hostids'][0] == host_id:
                 return None
         except Exception as err:
@@ -475,6 +482,7 @@ def add_host(params, host_name, host_visible_name):
                 }
             ] if params['envmon'] else []
         )
+        params['host_changed'] = True
         return result['hostids'][0]
     except Exception as err:
         if params['debug'] > 1:
@@ -510,6 +518,7 @@ def add_item(params, host_id, item, tag):
             description=item['description'],
             tags=[{'tag': 'Service', 'value': tag}] if tag else [],
         )
+        params['host_changed'] = True
         return result['itemids']
     except Exception as err:
         if params['debug'] > 1:
@@ -685,7 +694,7 @@ def get_certificates(params, node, server):
         return None
 
 
-def host_mon(params, server_data):
+def host_mon(shared_params, server_data):
     """Query Host monitoring data (Health or EnvMon) and save to Zabbix.
     """
     # Examples of server_data:
@@ -695,6 +704,10 @@ def host_mon(params, server_data):
     # Server name part is "greedy" match to allow server names to have
     # "/" character
     match = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', server_data)
+
+    # Creating copy of params to be able to modify that without affecting other threads.
+    params = shared_params.copy()
+    params['host_changed'] = False
 
     if match is None or match.lastindex != 5:
         print_error(f"Incorrect server string '{server_data}'!")
@@ -856,6 +869,16 @@ def host_mon(params, server_data):
                         metric_path, NS).text))
                 except AttributeError:
                     pass
+
+    # Zabbix may reject metrics if they are sent to quickly after host creation or items addition
+    # Sleep after host changes helps to avoid this problem
+    # Sleep should be longer than Zabbix Server CacheUpdateFrequency value (default 60s)
+    if params['host_changed'] and params['sleep_after_host_change']:
+        if params['debug']:
+            print_debug(
+                f"Waiting {params['sleep_after_host_change']} seconds for Zabbix cache to be updated "
+                f"after changes to host '{host_name}'.")
+        time.sleep(params['sleep_after_host_change'])
 
     # Pushing metrics to Zabbix
     sender = ZabbixSender(zabbix_server=urlsplit(params['zabbix_url']).hostname,
