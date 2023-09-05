@@ -298,7 +298,7 @@ def print_debug(content):
 
 def print_error(content):
     """Thread safe and unicode safe error printer."""
-    content = f"{threading.currentThread().getName()}: ERROR: '{content}'\n"
+    content = f"{threading.current_thread().name}: ERROR: '{content}'\n"
     sys.stderr.write(content)
 
 
