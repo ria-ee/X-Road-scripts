@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 
-from threading import Thread, Event
+"""X-Road listMethods request to all members."""
+
 import argparse
-import xrdinfo
 import queue
 import sys
+from threading import Thread, Event
+import xrdinfo
 
 # By default return listMethods
 DEFAULT_METHOD = 'listMethods'
@@ -18,46 +20,44 @@ DEFAULT_THREAD_COUNT = 1
 
 def print_error(content):
     """Error printer."""
-    content = "ERROR: {}\n".format(content)
-    sys.stderr.write(content)
+    sys.stderr.write(f'ERROR: {content}\n')
 
 
 def worker(params):
+    """Main function for worker threads"""
     while True:
-        # Checking periodically if it is the time to gracefully shutdown
+        # Checking periodically if it is the time to gracefully shut down
         # the worker.
         try:
             subsystem = params['work_queue'].get(True, 0.1)
         except queue.Empty:
             if params['shutdown'].is_set():
                 return
-            else:
-                continue
+            continue
         try:
             if params['rest']:
                 for method in xrdinfo.methods_rest(
                         addr=params['url'], client=params['client'], producer=subsystem,
                         method=params['method'], timeout=params['timeout'], verify=params['verify'],
                         cert=params['cert']):
-                    line = xrdinfo.identifier(method) + '\n'
                     # Using thread safe "write" instead of "print"
-                    sys.stdout.write(line)
+                    sys.stdout.write(xrdinfo.identifier(method) + '\n')
             else:
                 for method in xrdinfo.methods(
                         addr=params['url'], client=params['client'], producer=subsystem,
                         method=params['method'], timeout=params['timeout'],
                         verify=params['verify'],
                         cert=params['cert']):
-                    line = xrdinfo.identifier(method) + '\n'
                     # Using thread safe "write" instead of "print"
-                    sys.stdout.write(line)
-        except Exception as e:
-            print_error('{}: {}'.format(type(e).__name__, e))
+                    sys.stdout.write(xrdinfo.identifier(method) + '\n')
+        except Exception as err:
+            print_error(f'{type(err).__name__}: {err}')
         finally:
             params['work_queue'].task_done()
 
 
 def main():
+    """Main function"""
     parser = argparse.ArgumentParser(
         description='X-Road listMethods request to all members.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -100,9 +100,9 @@ def main():
         'shutdown': Event()
     }
 
-    if not (len(params['client']) in (3, 4)):
-        print_error('Client name is incorrect: "{}"'.format(args.client))
-        exit(1)
+    if not len(params['client']) in (3, 4):
+        print_error(f'Client name is incorrect: "{args.client}"')
+        sys.exit(1)
 
     if args.allowed:
         params['method'] = 'allowedMethods'
@@ -122,38 +122,37 @@ def main():
     if args.threads and args.threads > 0:
         params['thread_cnt'] = args.threads
 
-    shared_params = None
     try:
         shared_params = xrdinfo.shared_params_ss(
             addr=args.url, instance=params['instance'], timeout=params['timeout'],
             verify=params['verify'], cert=params['cert'])
-    except xrdinfo.XrdInfoError as e:
-        print_error('Cannot download Global Configuration: {}'.format(e))
-        exit(1)
+    except xrdinfo.XrdInfoError as err:
+        print_error(f'Cannot download Global Configuration: {err}')
+        sys.exit(1)
 
     # Create and start new threads
     threads = []
     for _ in range(params['thread_cnt']):
-        t = Thread(target=worker, args=(params,))
-        t.daemon = True
-        t.start()
-        threads.append(t)
+        thread = Thread(target=worker, args=(params,))
+        thread.daemon = True
+        thread.start()
+        threads.append(thread)
 
     # Populate the queue
     try:
         for subsystem in xrdinfo.registered_subsystems(shared_params):
             params['work_queue'].put(subsystem)
-    except xrdinfo.XrdInfoError as e:
-        print_error(e)
-        exit(1)
+    except xrdinfo.XrdInfoError as err:
+        print_error(err)
+        sys.exit(1)
 
     # Block until all tasks in queue are done
     params['work_queue'].join()
 
     # Set shutdown event and wait until all daemon processes finish
     params['shutdown'].set()
-    for t in threads:
-        t.join()
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == '__main__':

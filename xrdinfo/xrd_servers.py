@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
+"""List addresses of X-Road Security Servers."""
+
 import argparse
-import xrdinfo
 import sys
+import xrdinfo
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT = 5.0
@@ -10,11 +12,11 @@ DEFAULT_TIMEOUT = 5.0
 
 def print_error(content):
     """Error printer."""
-    content = "ERROR: {}\n".format(content)
-    sys.stderr.write(content)
+    sys.stderr.write(f'ERROR: {content}\n')
 
 
 def main():
+    """Main function"""
     parser = argparse.ArgumentParser(
         description='List addresses of X-Road Security Servers.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -55,32 +57,30 @@ def main():
     if args.cert and args.key:
         cert = (args.cert, args.key)
 
-    shared_params = None
     if args.s:
         try:
             shared_params = xrdinfo.shared_params_ss(
                 addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
-        except xrdinfo.XrdInfoError as e:
-            print_error(e)
-            exit(1)
+        except xrdinfo.XrdInfoError as err:
+            print_error(err)
+            sys.exit(1)
     elif args.c:
         try:
             shared_params = xrdinfo.shared_params_cs(
                 addr=args.c, timeout=timeout, verify=verify, cert=cert)
-        except xrdinfo.XrdInfoError as e:
-            print_error(e)
-            exit(1)
+        except xrdinfo.XrdInfoError as err:
+            print_error(err)
+            sys.exit(1)
     else:
         parser.print_help()
-        exit(1)
+        sys.exit(1)
 
     try:
         for server in xrdinfo.servers(shared_params):
-            line = xrdinfo.identifier(server)
-            print(line)
-    except xrdinfo.XrdInfoError as e:
-        print_error(e)
-        exit(1)
+            print(xrdinfo.identifier(server))
+    except xrdinfo.XrdInfoError as err:
+        print_error(err)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

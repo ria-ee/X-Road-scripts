@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
+"""List X-Road Subsystems that are attached to Security Server (registered)."""
+
 import argparse
-import xrdinfo
 import sys
+import xrdinfo
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT = 5.0
@@ -10,11 +12,11 @@ DEFAULT_TIMEOUT = 5.0
 
 def print_error(content):
     """Error printer."""
-    content = "ERROR: {}\n".format(content)
-    sys.stderr.write(content)
+    sys.stderr.write(f'ERROR: {content}\n')
 
 
 def main():
+    """Main function"""
     parser = argparse.ArgumentParser(
         description='List X-Road Subsystems that are attached to Security Server (registered).',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -60,27 +62,26 @@ def main():
         try:
             shared_params = xrdinfo.shared_params_ss(
                 addr=args.s, instance=instance, timeout=timeout, verify=verify, cert=cert)
-        except xrdinfo.XrdInfoError as e:
-            print_error(e)
-            exit(1)
+        except xrdinfo.XrdInfoError as err:
+            print_error(err)
+            sys.exit(1)
     elif args.c:
         try:
             shared_params = xrdinfo.shared_params_cs(
                 addr=args.c, timeout=timeout, verify=verify, cert=cert)
-        except xrdinfo.XrdInfoError as e:
-            print_error(e)
-            exit(1)
+        except xrdinfo.XrdInfoError as err:
+            print_error(err)
+            sys.exit(1)
     else:
         parser.print_help()
-        exit(1)
+        sys.exit(1)
 
     try:
         for subsystem in xrdinfo.registered_subsystems(shared_params):
-            line = xrdinfo.identifier(subsystem)
-            print(line)
-    except xrdinfo.XrdInfoError as e:
-        print_error(e)
-        exit(1)
+            print(xrdinfo.identifier(subsystem))
+    except xrdinfo.XrdInfoError as err:
+        print_error(err)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

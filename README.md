@@ -15,7 +15,7 @@ If Security Server requires TLS authentication then you can add your TLS
 certificate in Security Server administration interface:
 MEMBER/SUBSYSTEM -> Internal Servers -> INTERNAL TLS CERTIFICATES
 
-Scripts were tested with Python 3.8 (Ubuntu 20.04 LTS)
+Scripts were tested with Python 3.8 (Ubuntu 20.04 LTS) and Python 3.10 (Ubuntu 22.04 LTS)
 
 ## Messagelog:
 [cat_mlog.sh](messagelog/cat_mlog.sh) - This script prints the contents
@@ -42,7 +42,7 @@ compatible with X-Road REST identifiers:
 * [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of
   the X-Road request) methods (services) in X-Road instance.
-* xrd_all_wsdls.py - Downloads all WSDL documents of specified X-Road
+* ~~xrd_all_wsdls.py~~ - Downloads all WSDL documents of specified X-Road
   instance and creates an index for these WSDL's. This functionality
   was moved to repositories:
   * https://koodivaramu.eesti.ee/x-tee/x-road-catalogue-collector
@@ -104,7 +104,6 @@ Environment monitoring is using Zabbix template
 imported into Zabbix prior to execution of the collector.
 
 Collector requires [py-zabbix](https://github.com/adubkov/py-zabbix) package
-(tested with version 1.1.3 for Zabbix 3 and version 1.1.7 for Zabbix 4)
 which can be installed with:
 ```
 sudo pip install py-zabbix

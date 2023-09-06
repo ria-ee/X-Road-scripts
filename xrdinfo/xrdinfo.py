@@ -1,24 +1,27 @@
 #!/usr/bin/python3
 
-"""X-Road informational module."""
+"""X-Road informational module.
+This module can be user to query various types of information about
+X-Road Members, Subsystems, Servers, Services and Service descriptions.
+"""
 
 __all__ = [
     'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'NotOpenapiServiceError',
-    'OpenapiReadError', 'shared_params_ss', 'shared_params_cs', 'members', 'subsystems',
-    'subsystems_with_membername', 'registered_subsystems', 'subsystems_with_server', 'servers',
-    'addr_ips', 'servers_ips', 'methods', 'methods_rest', 'wsdl', 'wsdl_methods', 'openapi',
-    'openapi_endpoints', 'identifier', 'identifier_parts']
-__version__ = '1.2'
+    'OpenapiReadError', 'soap_request', 'rest_get_request', 'shared_params_ss', 'shared_params_cs',
+    'members', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
+    'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
+    'wsdl', 'wsdl_methods', 'openapi', 'openapi_endpoints', 'identifier', 'identifier_parts']
+__version__ = '1.3'
 __author__ = 'Vitali Stupin'
 
 import json
+from io import BytesIO
 import re
 import socket
-import urllib.parse as urlparse
+from urllib import parse
 import uuid
+from xml.etree import ElementTree
 import zipfile
-import xml.etree.ElementTree as ElementTree
-from io import BytesIO
 import requests
 import yaml
 
@@ -102,18 +105,18 @@ NS = {'xrd': 'http://x-road.eu/xsd/xroad.xsd',
 
 
 class XrdInfoError(Exception):
-    """ XrdInfo generic Exception """
+    """XrdInfo generic Exception."""
 
     def __init__(self, exc):
         if isinstance(exc, XrdInfoError):
             # No need to double wrap the exception
-            super(XrdInfoError, self).__init__(exc)
+            super().__init__(exc)
         elif isinstance(exc, Exception):
             # Wrapped exception
-            super(XrdInfoError, self).__init__('{}: {}'.format(type(exc).__name__, exc))
+            super().__init__(f'{type(exc).__name__}: {exc}')
         else:
             # Error message
-            super(XrdInfoError, self).__init__(exc)
+            super().__init__(exc)
 
 
 class RequestTimeoutError(XrdInfoError):
@@ -124,7 +127,7 @@ class SoapFaultError(XrdInfoError):
     """SOAP Fault received."""
 
     def __init__(self, msg):
-        super(SoapFaultError, self).__init__('SoapFault: {}'.format(msg))
+        super().__init__(f'SoapFault: {msg}')
 
 
 class NotOpenapiServiceError(XrdInfoError):
@@ -135,55 +138,99 @@ class OpenapiReadError(XrdInfoError):
     """Producer Security Server failed to read OpenAPI description."""
 
 
-def raise_rest_exception(err, response):
-    """Raises more precise exception for REST services"""
+def add_url_scheme(addr, verify=False, cert=None):
+    """Add HTTP/HTTPS scheme to address if scheme is missing."""
+    url = addr
+    if not parse.urlsplit(url).scheme and (verify or cert):
+        url = 'https://' + url
+    elif not parse.urlsplit(url).scheme:
+        url = 'http://' + url
+    return url
+
+
+def soap_request(addr, data, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+    """X-Road SOAP request.
+    Return tuple: (response, xml_root).
+    """
+    url = add_url_scheme(addr, verify=verify, cert=cert)
+    headers = {'content-type': 'text/xml'}
     try:
-        resp = json.loads(response.text)
-        if resp['message'] == 'Invalid service type: REST':
-            raise NotOpenapiServiceError('Service does not have OpenAPI description')
-        if re.search('^Failed reading service description from', resp['message']):
-            raise OpenapiReadError('Failed reading service OpenAPI description')
-        raise XrdInfoError('RestError: {}: {}'.format(resp['type'], resp['message']))
-    except (AttributeError, json.JSONDecodeError, KeyError):
-        # Failed to find precise error.
-        raise XrdInfoError(err)
+        response = requests.post(
+            url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify,
+            cert=cert)
+        response.raise_for_status()
+        response.encoding = 'utf-8'
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err) from err
+    except requests.exceptions.RequestException as err:
+        raise XrdInfoError(err) from err
+
+    # Searching for SOAP envelope and ignoring MIME parts in response
+    envel = re.search(
+        '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', response.text, re.DOTALL)
+    try:
+        root = ElementTree.fromstring(envel.group(0))
+    except (AttributeError, ElementTree.ParseError) as err:
+        raise XrdInfoError('Received incorrect SOAP response') from err
+    if root.find('.//faultstring') is not None:
+        raise SoapFaultError(root.find('.//faultstring').text)
+
+    return response, root
+
+
+def rest_get_request(url, client_header, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+    """X-Road REST GET request."""
+    headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
+    try:
+        response = requests.get(
+            url, headers=headers, timeout=timeout, verify=verify, cert=cert)
+        response.encoding = 'utf-8'
+        if 400 <= response.status_code < 600:
+            # Trying to raise more precise exception
+            resp = json.loads(response.text)
+            if resp['message'] == 'Invalid service type: REST':
+                raise NotOpenapiServiceError(
+                    'Service does not have OpenAPI description')
+            if re.search('^Failed reading service description from', resp['message']):
+                raise OpenapiReadError('Failed reading service OpenAPI description')
+            raise XrdInfoError(f"RestError: {resp['type']}: {resp['message']}")
+        return response
+    except requests.exceptions.Timeout as err:
+        raise RequestTimeoutError(err) from err
+    except Exception as err:
+        raise XrdInfoError(err) from err
 
 
 def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
     """Get shared-params.xml content from local Security Server.
-    By default return info about local X-Road instance.
+    By default, return info about local X-Road instance.
     """
     try:
-        url = addr
-        # Add HTTP/HTTPS scheme if missing
-        if not urlparse.urlsplit(url).scheme and (verify or cert):
-            url = 'https://' + url
-        elif not urlparse.urlsplit(url).scheme:
-            url = 'http://' + url
+        url = add_url_scheme(addr, verify=verify, cert=cert)
         # Add '/verificationconf' if path is missing
-        if urlparse.urlsplit(url).path == '':
+        if parse.urlsplit(url).path == '':
             url = url + '/verificationconf'
-        elif urlparse.urlsplit(url).path == '/':
+        elif parse.urlsplit(url).path == '/':
             url = url + 'verificationconf'
         ver_conf_response = requests.get(url, timeout=timeout, verify=verify, cert=cert)
         ver_conf_response.raise_for_status()
         zip_data = BytesIO()
         zip_data.write(ver_conf_response.content)
-        ver_conf_zip = zipfile.ZipFile(zip_data)
-        ident = instance
-        if ident is None:
-            # Use local instance configuration
-            ident_file = ver_conf_zip.open('verificationconf/instance-identifier')
-            ident = ident_file.read()
-            ident = ident.decode('utf-8')
-        shared_params_file = ver_conf_zip.open(
-            'verificationconf/{}/shared-params.xml'.format(ident))
-        shared_params = shared_params_file.read()
+        with zipfile.ZipFile(zip_data) as ver_conf_zip:
+            ident = instance
+            if ident is None:
+                # Use local instance configuration
+                with ver_conf_zip.open('verificationconf/instance-identifier') as ident_file:
+                    ident = ident_file.read()
+                ident = ident.decode('utf-8')
+            with ver_conf_zip.open(
+                    f'verificationconf/{ident}/shared-params.xml') as shared_params_file:
+                shared_params = shared_params_file.read()
         return shared_params.decode('utf-8')
     except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
+        raise RequestTimeoutError(err) from err
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
@@ -193,31 +240,26 @@ def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
     possible.
     """
     try:
-        url = addr
-        # Add HTTP/HTTPS scheme if missing
-        if not urlparse.urlsplit(url).scheme and (verify or cert):
-            url = 'https://' + url
-        elif not urlparse.urlsplit(url).scheme:
-            url = 'http://' + url
+        url = add_url_scheme(addr, verify=verify, cert=cert)
         # Add '/internalconf' if path is missing
-        if urlparse.urlsplit(url).path == '':
+        if parse.urlsplit(url).path == '':
             url = url + '/internalconf'
-        elif urlparse.urlsplit(url).path == '/':
+        elif parse.urlsplit(url).path == '/':
             url = url + 'internalconf'
         global_conf = requests.get(url, timeout=timeout, verify=verify, cert=cert)
         global_conf.raise_for_status()
         # Configuration Proxy uses lowercase for 'Content-location'
         search_res = re.search(
             'Content-location: (/.+/shared-params.xml)', global_conf.text, re.IGNORECASE)
-        url2 = urlparse.urljoin(url, search_res.group(1))
+        url2 = parse.urljoin(url, search_res.group(1))
         shared_params_response = requests.get(url2, timeout=timeout, verify=verify, cert=cert)
         shared_params_response.raise_for_status()
         shared_params_response.encoding = 'utf-8'
         return shared_params_response.text
     except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
+        raise RequestTimeoutError(err) from err
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def members(shared_params):
@@ -232,7 +274,7 @@ def members(shared_params):
             member_code = '' + member.find('./memberCode').text
             yield instance, member_class, member_code
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def subsystems(shared_params):
@@ -250,13 +292,13 @@ def subsystems(shared_params):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield instance, member_class, member_code, subsystem_code
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def subsystems_with_membername(shared_params):
     """List Subsystems in shared_params with Member name.
     Return tuple: (xRoadInstance, memberClass, memberCode,
-    subsystemCode, Member Name).
+    subsystemCode, MemberName).
     """
     try:
         root = ElementTree.fromstring(shared_params)
@@ -269,7 +311,7 @@ def subsystems_with_membername(shared_params):
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 yield instance, member_class, member_code, subsystem_code, member_name
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def registered_subsystems(shared_params):
@@ -287,10 +329,10 @@ def registered_subsystems(shared_params):
             for subsystem in member.findall('./subsystem'):
                 subsystem_id = subsystem.attrib['id']
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
-                if root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
+                if root.findall(f'./securityServer[client="{subsystem_id}"]'):
                     yield instance, member_class, member_code, subsystem_code
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def subsystems_with_server(shared_params):
@@ -314,9 +356,9 @@ def subsystems_with_server(shared_params):
                 subsystem_id = subsystem.attrib['id']
                 subsystem_code = '' + subsystem.find('./subsystemCode').text
                 server_found = False
-                for server in root.findall('./securityServer[client="{}"]'.format(subsystem_id)):
+                for server in root.findall(f'./securityServer[client="{subsystem_id}"]'):
                     owner_id = server.find('./owner').text
-                    owner = root.find('./member[@id="{}"]'.format(owner_id))
+                    owner = root.find(f'./member[@id="{owner_id}"]')
                     owner_class = '' + owner.find('./memberClass/code').text
                     owner_code = '' + owner.find('./memberCode').text
                     server_code = '' + server.find('./serverCode').text
@@ -328,7 +370,7 @@ def subsystems_with_server(shared_params):
                 if not server_found:
                     yield instance, member_class, member_code, subsystem_code
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def servers(shared_params):
@@ -342,14 +384,14 @@ def servers(shared_params):
         instance = '' + root.find('./instanceIdentifier').text
         for server in root.findall('./securityServer'):
             owner_id = server.find('./owner').text
-            owner = root.find('./member[@id="{}"]'.format(owner_id))
+            owner = root.find(f'./member[@id="{owner_id}"]')
             member_class = '' + owner.find('./memberClass/code').text
             member_code = '' + owner.find('./memberCode').text
             server_code = '' + server.find('./serverCode').text
             address = '' + server.find('./address').text
             yield instance, member_class, member_code, server_code, address
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def addr_ips(address):
@@ -363,11 +405,11 @@ def addr_ips(address):
         # Ignoring DNS name not found error
         pass
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def servers_ips(shared_params):
-    """List IP adresses of Security Servers in shared_params.
+    """List IP addresses of Security Servers in shared_params.
     Unresolved DNS names are silently ignored.
     """
     try:
@@ -377,7 +419,7 @@ def servers_ips(shared_params):
             for ip_address in addr_ips(address):
                 yield '' + ip_address
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def methods(
@@ -387,13 +429,6 @@ def methods(
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode, serviceCode, serviceVersion).
     """
-    url = addr
-    # Add HTTP/HTTPS scheme if missing
-    if not urlparse.urlsplit(url).scheme and (verify or cert):
-        url = 'https://' + url
-    elif not urlparse.urlsplit(url).scheme:
-        url = 'http://' + url
-
     body = METHODS_BODY_TEMPL.format(service_code=method)
     if (len(client) == 3 or client[3] == '') and len(producer) == 4:
         data = REQUEST_MEMBER_TEMPL.format(
@@ -404,46 +439,28 @@ def methods(
     else:
         return
 
-    headers = {'content-type': 'text/xml'}
+    _, root = soap_request(addr, data, timeout=timeout, verify=verify, cert=cert)
     try:
-        methods_response = requests.post(
-            url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify,
-            cert=cert)
-        methods_response.raise_for_status()
-        methods_response.encoding = 'utf-8'
-
-        # Some servers might return multipart message.
-        envel = re.search(
-            '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', methods_response.text, re.DOTALL)
-        try:
-            root = ElementTree.fromstring(envel.group(0))
-        except AttributeError:
-            raise XrdInfoError('Received incorrect response')
-        if root.find('.//faultstring') is not None:
-            raise SoapFaultError(root.find('.//faultstring').text)
-
-        for service in root.findall('.//xrd:{}Response/xrd:service'.format(method), NS):
+        for service in root.findall(f'.//xrd:{method}Response/xrd:service', NS):
             result = {
                 'xRoadInstance': service.find('./id:xRoadInstance', NS).text,
                 'memberClass': service.find('./id:memberClass', NS).text,
                 'memberCode': service.find('./id:memberCode', NS).text,
-                # Elements subsystemCode may be missing.
+                # Element subsystemCode may be missing
                 'subsystemCode':
                     service.find('./id:subsystemCode', NS).text
                     if service.find('./id:subsystemCode', NS) is not None
                     else '',
                 'serviceCode': service.find('./id:serviceCode', NS).text,
-                # Element serviceVersion may be missing.
+                # Element serviceVersion may be missing
                 'serviceVersion':
                     service.find('./id:serviceVersion', NS).text
                     if service.find('./id:serviceVersion', NS) is not None
                     else ''}
             yield (result['xRoadInstance'], result['memberClass'], result['memberCode'],
                    result['subsystemCode'], result['serviceCode'], result['serviceVersion'])
-    except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
-    except Exception as err:
-        raise XrdInfoError(err)
+    except AttributeError as err:
+        raise XrdInfoError(err) from err
 
 
 def methods_rest(
@@ -453,51 +470,28 @@ def methods_rest(
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode, serviceCode).
     """
-    url = addr
-    # Add HTTP/HTTPS scheme if missing
-    if not urlparse.urlsplit(url).scheme and (verify or cert):
-        url = 'https://' + url
-    elif not urlparse.urlsplit(url).scheme:
-        url = 'http://' + url
-
     if (len(client) == 3 or client[3] == '') and len(producer) == 4:
         client_header = identifier(client[:3])
     elif len(client) == 4 and len(producer) == 4:
         client_header = identifier(client[:4])
     else:
         return
-    # "producer" length already checked
-    url = urlparse.urljoin(url, '/{}/{}/{}'.format(XRD_REST_VERSION, identifier(producer), method))
 
-    headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
-    methods_response = None
+    url = add_url_scheme(addr, verify=verify, cert=cert)
+    url = parse.urljoin(url, f'/{XRD_REST_VERSION}/{identifier(producer)}/{method}')
+    response = rest_get_request(url, client_header, timeout=timeout, verify=verify, cert=cert)
+
     try:
-        methods_response = requests.get(
-            url, headers=headers, timeout=timeout, verify=verify, cert=cert)
-        methods_response.raise_for_status()
-        methods_response.encoding = 'utf-8'
-
-        services = json.loads(methods_response.text)
-
+        services = response.json()
         for service in services['service']:
             yield (service['xroad_instance'], service['member_class'], service['member_code'],
                    service['subsystem_code'], service['service_code'])
-
-    except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
     except Exception as err:
-        raise_rest_exception(err, methods_response)
+        raise XrdInfoError(err) from err
 
 
 def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
     """Get X-Road getWsdl response."""
-    url = addr
-    # Add HTTP/HTTPS scheme if missing
-    if not urlparse.urlsplit(url).scheme and (verify or cert):
-        url = 'https://' + url
-    elif not urlparse.urlsplit(url).scheme:
-        url = 'http://' + url
-
     if service[5]:
         # Service with version
         body = GETWSDL_BODY_TEMPL.format(service_code=service[4], service_version=service[5])
@@ -517,39 +511,15 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
     else:
         return None
 
-    headers = {'content-type': 'text/xml'}
-    try:
-        wsdl_response = requests.post(
-            url, data=data.encode('utf-8'), headers=headers, timeout=timeout, verify=verify,
-            cert=cert)
-        wsdl_response.raise_for_status()
-        wsdl_response.encoding = 'utf-8'
+    wsdl_response, _ = soap_request(addr, data, timeout=timeout, verify=verify, cert=cert)
 
-        resp = re.search(
-            '--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>'
-            '.+--xroad.+content-type:text/xml.*?\r\n\r\n(.+)\r\n--xroad.+',
-            wsdl_response.text, re.DOTALL)
-        if resp:
-            envel = re.search(
-                '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', resp.group(1), re.DOTALL)
-            if envel:
-                # SOAP Fault found instead of WSDL
-                root = ElementTree.fromstring(envel.group(0))
-                if root.find('.//faultstring') is not None:
-                    raise SoapFaultError(root.find('.//faultstring').text)
-            else:
-                return resp.group(1)
-
-        envel = re.search(
-            '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', wsdl_response.text, re.DOTALL)
-        root = ElementTree.fromstring(envel.group(0))
-        if root.find('.//faultstring') is not None:
-            raise SoapFaultError(root.find('.//faultstring').text)
-        raise XrdInfoError('WSDL not found')
-    except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
-    except Exception as err:
-        raise XrdInfoError(err)
+    resp = re.search(
+        '--xroad.+content-type:text/xml.+<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>'
+        '.+--xroad.+content-type:text/xml.*?\r\n\r\n(.+)\r\n--xroad.+',
+        wsdl_response.text, re.DOTALL)
+    if resp:
+        return resp.group(1)
+    raise XrdInfoError('WSDL not found')
 
 
 def wsdl_methods(wsdl_doc):
@@ -562,40 +532,27 @@ def wsdl_methods(wsdl_doc):
             if 'name' in operation.attrib:
                 yield '' + operation.attrib['name'], '' + version
     except Exception as err:
-        raise XrdInfoError(err)
+        raise XrdInfoError(err) from err
 
 
 def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
     """Get X-Road getOpenAPI response."""
-    url = addr
-    # Add HTTP/HTTPS scheme if missing
-    if not urlparse.urlsplit(url).scheme and (verify or cert):
-        url = 'https://' + url
-    elif not urlparse.urlsplit(url).scheme:
-        url = 'http://' + url
-
     if (len(client) == 3 or client[3] == '') and len(service) == 5:
         client_header = identifier(client[:3])
     elif len(client) == 4 and len(service) == 5:
         client_header = identifier(client[:4])
     else:
         return None
-    # "producer" length already checked
-    url = urlparse.urljoin(url, '/{}/{}/getOpenAPI?serviceCode={}'.format(
-        XRD_REST_VERSION, identifier(service[:4]), encode_part(service[4])))
 
-    headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
-    openapi_response = None
+    url = add_url_scheme(addr, verify=verify, cert=cert)
+    url = parse.urljoin(
+        url, f'/{XRD_REST_VERSION}/{identifier(service[:4])}'
+             f'/getOpenAPI?serviceCode={encode_part(service[4])}')
     try:
-        openapi_response = requests.get(
-            url, headers=headers, timeout=timeout, verify=verify, cert=cert)
-        openapi_response.raise_for_status()
-        openapi_response.encoding = 'utf-8'
-        return openapi_response.text
-    except requests.exceptions.Timeout as err:
-        raise RequestTimeoutError(err)
+        return rest_get_request(
+            url, client_header, timeout=timeout, verify=verify, cert=cert).text
     except Exception as err:
-        raise_rest_exception(err, openapi_response)
+        raise XrdInfoError(err) from err
 
 
 def load_openapi(openapi_doc):
@@ -610,8 +567,8 @@ def load_openapi(openapi_doc):
         try:
             data = yaml.load(openapi_doc, Loader=yaml.SafeLoader)
             return data, 'yaml'
-        except yaml.YAMLError:
-            raise XrdInfoError('Can not parse OpenAPI description')
+        except yaml.YAMLError as err:
+            raise XrdInfoError('Can not parse OpenAPI description') from err
 
 
 def openapi_endpoints(openapi_doc):
@@ -622,12 +579,12 @@ def openapi_endpoints(openapi_doc):
     try:
         for path, operations in data['paths'].items():
             for verb, operation in operations.items():
-                if (verb in ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']):
+                if verb in ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']:
                     results.append({
                         'verb': verb, 'path': path, 'summary': operation.get('summary', ''),
                         'description': operation.get('description', '')})
-    except Exception:
-        raise XrdInfoError('Endpoints not found')
+    except Exception as err:
+        raise XrdInfoError('Endpoints not found') from err
 
     if not results:
         # OpenAPI without endpoints is not considered valid
@@ -638,7 +595,7 @@ def openapi_endpoints(openapi_doc):
 
 def encode_part(part):
     """Percent-Encode identifier part."""
-    return urlparse.quote(part, safe='')
+    return parse.quote(part, safe='')
 
 
 def identifier(items):
@@ -650,4 +607,4 @@ def identifier(items):
 
 def identifier_parts(ident_str):
     """Convert identifier to list of parts."""
-    return list(map(urlparse.unquote, ident_str.split('/')))
+    return list(map(parse.unquote, ident_str.split('/')))

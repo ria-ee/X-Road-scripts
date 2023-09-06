@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 
+"""X-Road getOpenApi request."""
+
 import argparse
-import xrdinfo
-import sys
 import json
+import sys
+import xrdinfo
 
 # Default timeout for HTTP requests
 DEFAULT_TIMEOUT = 5.0
@@ -11,11 +13,11 @@ DEFAULT_TIMEOUT = 5.0
 
 def print_error(content):
     """Error printer."""
-    content = "ERROR: {}\n".format(content)
-    sys.stderr.write(content)
+    sys.stderr.write(f'ERROR: {content}\n')
 
 
 def main():
+    """Main function"""
     parser = argparse.ArgumentParser(
         description='X-Road getOpenApi request.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -56,14 +58,14 @@ def main():
         cert = (args.cert, args.key)
 
     client = xrdinfo.identifier_parts(args.client)
-    if not (len(client) in (3, 4)):
-        print_error('Client name is incorrect: "{}"'.format(args.client))
-        exit(1)
+    if not len(client) in (3, 4):
+        print_error(f'Client name is incorrect: "{args.client}"')
+        sys.exit(1)
 
     service = xrdinfo.identifier_parts(args.service)
-    if not (len(service) == 5):
-        print_error('Service name is incorrect: "{}"'.format(args.service))
-        exit(1)
+    if not len(service) == 5:
+        print_error(f'Service name is incorrect: "{args.service}"')
+        sys.exit(1)
 
     try:
         openapi = xrdinfo.openapi(
@@ -73,9 +75,9 @@ def main():
             print(json.dumps(xrdinfo.openapi_endpoints(openapi), indent=2, ensure_ascii=False))
         else:
             print(openapi)
-    except xrdinfo.XrdInfoError as e:
-        print_error(e)
-        exit(1)
+    except xrdinfo.XrdInfoError as err:
+        print_error(err)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
