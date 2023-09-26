@@ -296,7 +296,7 @@ ENVMON_REQUEST_MEMBER_TEMPLATE = """<SOAP-ENV:Envelope
 
 def print_debug(content):
     """Thread safe and unicode safe debug printer."""
-    content = f'{threading.currentThread().getName()}: {content}\n'
+    content = f'{threading.current_thread().name}: {content}\n'
     sys.stdout.write(content)
 
 
