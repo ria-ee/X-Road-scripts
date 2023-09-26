@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 import uuid
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote
 from xml.etree import ElementTree
 import requests
 from pyzabbix import ZabbixMetric, ZabbixSender, ZabbixAPI
@@ -703,17 +703,17 @@ def host_mon(shared_params, server_data):
     # INST/COM/00000002/00000002_1/xrd2.ss.dns
     # Server name part is "greedy" match to allow server names to have
     # "/" character
-    match = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', server_data)
+    server_match = re.match('^(.+?)/(.+?)/(.+?)/(.+)/(.+?)$', server_data)
 
     # Creating copy of params to be able to modify that without affecting other threads.
     params = shared_params.copy()
     params['host_changed'] = False
 
-    if match is None or match.lastindex != 5:
+    if server_match is None or server_match.lastindex != 5:
         print_error(f"Incorrect server string '{server_data}'!")
         return
 
-    host_visible_name = match.group(0)
+    host_visible_name = unquote(server_match.group(0))
     host_name = re.sub('[^0-9a-zA-Z-]+', '.', host_visible_name)
 
     if params['debug']:
@@ -754,8 +754,9 @@ def host_mon(shared_params, server_data):
         monitor_instance=params['monitoring_client_inst'],
         monitor_class=params['monitoring_client_class'],
         monitor_member=params['monitoring_client_member'],
-        monitor_subsystem=params['monitoring_client_subsystem'], instance=match.group(1),
-        member_class=match.group(2), member_code=match.group(3), server_code=match.group(4),
+        monitor_subsystem=params['monitoring_client_subsystem'],
+        instance=unquote(server_match.group(1)), member_class=unquote(server_match.group(2)),
+        member_code=unquote(server_match.group(3)), server_code=unquote(server_match.group(4)),
         uuid=uuid.uuid4()
     )
 
