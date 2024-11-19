@@ -11,7 +11,7 @@ __all__ = [
     'members', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
     'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
     'wsdl', 'wsdl_methods', 'openapi', 'openapi_endpoints', 'identifier', 'identifier_parts']
-__version__ = '1.3'
+__version__ = '1.3.1'
 __author__ = 'Vitali Stupin'
 
 import json
@@ -197,6 +197,9 @@ def rest_get_request(url, client_header, timeout=DEFAULT_TIMEOUT, verify=False, 
         return response
     except requests.exceptions.Timeout as err:
         raise RequestTimeoutError(err) from err
+    except XrdInfoError as err:
+        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
+        raise err
     except Exception as err:
         raise XrdInfoError(err) from err
 
@@ -486,6 +489,9 @@ def methods_rest(
         for service in services['service']:
             yield (service['xroad_instance'], service['member_class'], service['member_code'],
                    service['subsystem_code'], service['service_code'])
+    except XrdInfoError as err:
+        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
+        raise err
     except Exception as err:
         raise XrdInfoError(err) from err
 
@@ -551,6 +557,9 @@ def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=N
     try:
         return rest_get_request(
             url, client_header, timeout=timeout, verify=verify, cert=cert).text
+    except XrdInfoError as err:
+        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
+        raise err
     except Exception as err:
         raise XrdInfoError(err) from err
 
