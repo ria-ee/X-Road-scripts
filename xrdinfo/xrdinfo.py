@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 """X-Road informational module.
 This module can be user to query various types of information about
 X-Road Members, Subsystems, Servers, Services and Service descriptions.
@@ -11,8 +9,6 @@ __all__ = [
     'members', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
     'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
     'wsdl', 'wsdl_methods', 'openapi', 'openapi_endpoints', 'identifier', 'identifier_parts']
-__version__ = '1.3.1'
-__author__ = 'Vitali Stupin'
 
 import json
 from io import BytesIO
@@ -102,6 +98,14 @@ GETWSDL_BODY_TEMPL_NOVERSION = """        <xroad:getWsdl>
 NS = {'xrd': 'http://x-road.eu/xsd/xroad.xsd',
       'id': 'http://x-road.eu/xsd/identifiers',
       'wsdl': 'http://schemas.xmlsoap.org/wsdl/'}
+
+# Using XML path constants to avoid duplicating literals
+INSTANCE_IDENTIFIER_PATH = './instanceIdentifier'
+MEMBER_PATH = './member'
+MEMBER_CLASS_PATH = './memberClass/code'
+MEMBER_CODE_PATH = './memberCode'
+SUBSYSTEM_PATH = './subsystem'
+SUBSYSTEM_CODE_PATH = './subsystemCode'
 
 
 class XrdInfoError(Exception):
@@ -271,10 +275,10 @@ def members(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
-        for member in root.findall('./member'):
-            member_class = '' + member.find('./memberClass/code').text
-            member_code = '' + member.find('./memberCode').text
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
+        for member in root.findall(MEMBER_PATH):
+            member_class = '' + member.find(MEMBER_CLASS_PATH).text
+            member_code = '' + member.find(MEMBER_CODE_PATH).text
             yield instance, member_class, member_code
     except Exception as err:
         raise XrdInfoError(err) from err
@@ -287,12 +291,12 @@ def subsystems(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
-        for member in root.findall('./member'):
-            member_class = '' + member.find('./memberClass/code').text
-            member_code = '' + member.find('./memberCode').text
-            for subsystem in member.findall('./subsystem'):
-                subsystem_code = '' + subsystem.find('./subsystemCode').text
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
+        for member in root.findall(MEMBER_PATH):
+            member_class = '' + member.find(MEMBER_CLASS_PATH).text
+            member_code = '' + member.find(MEMBER_CODE_PATH).text
+            for subsystem in member.findall(SUBSYSTEM_PATH):
+                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
                 yield instance, member_class, member_code, subsystem_code
     except Exception as err:
         raise XrdInfoError(err) from err
@@ -305,13 +309,13 @@ def subsystems_with_membername(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
-        for member in root.findall('./member'):
-            member_class = '' + member.find('./memberClass/code').text
-            member_code = '' + member.find('./memberCode').text
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
+        for member in root.findall(MEMBER_PATH):
+            member_class = '' + member.find(MEMBER_CLASS_PATH).text
+            member_code = '' + member.find(MEMBER_CODE_PATH).text
             member_name = '' + member.find('./name').text
-            for subsystem in member.findall('./subsystem'):
-                subsystem_code = '' + subsystem.find('./subsystemCode').text
+            for subsystem in member.findall(SUBSYSTEM_PATH):
+                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
                 yield instance, member_class, member_code, subsystem_code, member_name
     except Exception as err:
         raise XrdInfoError(err) from err
@@ -325,13 +329,13 @@ def registered_subsystems(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
-        for member in root.findall('./member'):
-            member_class = '' + member.find('./memberClass/code').text
-            member_code = '' + member.find('./memberCode').text
-            for subsystem in member.findall('./subsystem'):
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
+        for member in root.findall(MEMBER_PATH):
+            member_class = '' + member.find(MEMBER_CLASS_PATH).text
+            member_code = '' + member.find(MEMBER_CODE_PATH).text
+            for subsystem in member.findall(SUBSYSTEM_PATH):
                 subsystem_id = subsystem.attrib['id']
-                subsystem_code = '' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
                 if root.findall(f'./securityServer[client="{subsystem_id}"]'):
                     yield instance, member_class, member_code, subsystem_code
     except Exception as err:
@@ -351,19 +355,19 @@ def subsystems_with_server(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
-        for member in root.findall('./member'):
-            member_class = '' + member.find('./memberClass/code').text
-            member_code = '' + member.find('./memberCode').text
-            for subsystem in member.findall('./subsystem'):
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
+        for member in root.findall(MEMBER_PATH):
+            member_class = '' + member.find(MEMBER_CLASS_PATH).text
+            member_code = '' + member.find(MEMBER_CODE_PATH).text
+            for subsystem in member.findall(SUBSYSTEM_PATH):
                 subsystem_id = subsystem.attrib['id']
-                subsystem_code = '' + subsystem.find('./subsystemCode').text
+                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
                 server_found = False
                 for server in root.findall(f'./securityServer[client="{subsystem_id}"]'):
                     owner_id = server.find('./owner').text
                     owner = root.find(f'./member[@id="{owner_id}"]')
-                    owner_class = '' + owner.find('./memberClass/code').text
-                    owner_code = '' + owner.find('./memberCode').text
+                    owner_class = '' + owner.find(MEMBER_CLASS_PATH).text
+                    owner_code = '' + owner.find(MEMBER_CODE_PATH).text
                     server_code = '' + server.find('./serverCode').text
                     address = '' + server.find('./address').text
                     yield (
@@ -384,12 +388,12 @@ def servers(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find('./instanceIdentifier').text
+        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
         for server in root.findall('./securityServer'):
             owner_id = server.find('./owner').text
             owner = root.find(f'./member[@id="{owner_id}"]')
-            member_class = '' + owner.find('./memberClass/code').text
-            member_code = '' + owner.find('./memberCode').text
+            member_class = '' + owner.find(MEMBER_CLASS_PATH).text
+            member_code = '' + owner.find(MEMBER_CODE_PATH).text
             server_code = '' + server.find('./serverCode').text
             address = '' + server.find('./address').text
             yield instance, member_class, member_code, server_code, address

@@ -36,6 +36,14 @@ and used in any Python3 application. It implements:
 * getWsdl X-Road request.
 * getOpenApi X-Road request.
 
+xrdinfo module can be installed using pip:
+```bash
+# From checked out repository
+pip install xrdinfo/
+# Or directly from github
+pip install 'xrdinfo @ git+https://github.com/ria-ee/X-Road-scripts.git@main#subdirectory=xrdinfo'
+```
+
 There are also some scripts that use xrdinfo module. Note that output
 identifiers consist of slash separated Percent-Encoded parts to be
 compatible with X-Road REST identifiers:
