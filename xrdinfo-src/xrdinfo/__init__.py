@@ -1,5 +1,5 @@
 """X-Road informational module.
-This module can be user to query various types of information about
+This module can be used to query various types of information about
 X-Road Members, Subsystems, Servers, Services and Service descriptions.
 """
 
@@ -8,12 +8,15 @@ __all__ = [
     'OpenapiReadError', 'soap_request', 'rest_get_request', 'shared_params_ss', 'shared_params_cs',
     'members', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
     'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
-    'wsdl', 'wsdl_methods', 'openapi', 'openapi_endpoints', 'identifier', 'identifier_parts']
+    'wsdl', 'wsdl_methods', 'openapi', 'load_openapi', 'openapi_endpoints', 'identifier',
+    'identifier_parts']
 
 import json
+from collections.abc import Iterator
 from io import BytesIO
 import re
 import socket
+from typing import Any, Sequence, TypeVar
 from urllib import parse
 import uuid
 from xml.etree import ElementTree
@@ -24,7 +27,7 @@ import yaml
 XRD_REST_VERSION = 'r1'
 
 # Timeout for requests
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT: float = 5.0
 
 REQUEST_MEMBER_TEMPL = """<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope
@@ -95,23 +98,18 @@ GETWSDL_BODY_TEMPL_NOVERSION = """        <xroad:getWsdl>
         </xroad:getWsdl>"""
 
 # Namespaces of X-Road schemas
-NS = {'xrd': 'http://x-road.eu/xsd/xroad.xsd',
-      'id': 'http://x-road.eu/xsd/identifiers',
-      'wsdl': 'http://schemas.xmlsoap.org/wsdl/'}
+NS: dict[str, str] = {
+    'xrd': 'http://x-road.eu/xsd/xroad.xsd',
+    'id': 'http://x-road.eu/xsd/identifiers',
+    'wsdl': 'http://schemas.xmlsoap.org/wsdl/'}
 
-# Using XML path constants to avoid duplicating literals
-INSTANCE_IDENTIFIER_PATH = './instanceIdentifier'
-MEMBER_PATH = './member'
-MEMBER_CLASS_PATH = './memberClass/code'
-MEMBER_CODE_PATH = './memberCode'
-SUBSYSTEM_PATH = './subsystem'
-SUBSYSTEM_CODE_PATH = './subsystemCode'
+T = TypeVar('T')
 
 
 class XrdInfoError(Exception):
     """XrdInfo generic Exception."""
 
-    def __init__(self, exc):
+    def __init__(self, exc: Exception | str):
         if isinstance(exc, XrdInfoError):
             # No need to double wrap the exception
             super().__init__(exc)
@@ -130,8 +128,11 @@ class RequestTimeoutError(XrdInfoError):
 class SoapFaultError(XrdInfoError):
     """SOAP Fault received."""
 
-    def __init__(self, msg):
-        super().__init__(f'SoapFault: {msg}')
+    def __init__(self, msg: str | None):
+        if str is not None:
+            super().__init__(f'SoapFault: {msg}')
+        else:
+            super().__init__('SoapFault: <None>')
 
 
 class NotOpenapiServiceError(XrdInfoError):
@@ -142,7 +143,117 @@ class OpenapiReadError(XrdInfoError):
     """Producer Security Server failed to read OpenAPI description."""
 
 
-def add_url_scheme(addr, verify=False, cert=None):
+def _fail_none(data: T | None) -> T:
+    """Return input data if it is not None or fail with exception"""
+    if data is not None:
+        return data
+    raise XrdInfoError('Unexpected None value')
+
+
+def _instance_identifier(root: ElementTree.Element) -> str:
+    """
+    Return instanceIdentifier value from X-Road global configuration.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(root.find('./instanceIdentifier')).text)
+
+
+def _members(root: ElementTree.Element) -> list[ElementTree.Element]:
+    """Return member nodes from X-Road global configuration"""
+    return root.findall('./member')
+
+
+def _member(root: ElementTree.Element, member_id: str) -> ElementTree.Element:
+    """
+    Return member node with specified id
+    from X-Road global configuration.
+    Raises exception if specified member does not exist.
+    """
+    return _fail_none(root.find(f'./member[@id="{member_id}"]'))
+
+
+def _member_class(member: ElementTree.Element) -> str:
+    """
+    Return memberClass value from member Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(member.find('./memberClass/code')).text)
+
+
+def _member_code(member: ElementTree.Element) -> str:
+    """
+    Return memberClass value from member Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(member.find('./memberCode')).text)
+
+
+def _member_name(member: ElementTree.Element) -> str:
+    """
+    Return member name value from member Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(member.find('./name')).text)
+
+
+def _subsystems(member: ElementTree.Element) -> list[ElementTree.Element]:
+    """Return subsystem nodes from member Element"""
+    return member.findall('./subsystem')
+
+
+def _subsystem_id(subsystem: ElementTree.Element) -> str:
+    """
+    Return subsystem id value from subsystem Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(subsystem.attrib['id'])
+
+
+def _subsystem_code(subsystem: ElementTree.Element) -> str:
+    """
+    Return subsystemCode value from subsystem Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(subsystem.find('./subsystemCode')).text)
+
+
+def _security_servers(
+        root: ElementTree.Element, client_id: str | None = None) -> list[ElementTree.Element]:
+    """
+    Return securityServer nodes from X-Road global configuration.
+    Results are optionally limited by server's client id.
+    """
+    if client_id:
+        return root.findall(f'./securityServer[client="{client_id}"]')
+    return root.findall('./securityServer')
+
+
+def _server_code(server: ElementTree.Element) -> str:
+    """
+    Return serverCode value from securityServer Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(server.find('./serverCode')).text)
+
+
+def _server_address(server: ElementTree.Element) -> str:
+    """
+    Return address value from securityServer Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(server.find('./address')).text)
+
+
+def _server_owner_id(server: ElementTree.Element) -> str:
+    """
+    Return owner id value from securityServer Element.
+    Raises exception if expected value does not exist.
+    """
+    return _fail_none(_fail_none(server.find('./owner')).text)
+
+
+def _add_url_scheme(
+        addr: str, verify: bool | str = False, cert: str | tuple[str, str] | None = None) -> str:
     """Add HTTP/HTTPS scheme to address if scheme is missing."""
     url = addr
     if not parse.urlsplit(url).scheme and (verify or cert):
@@ -152,11 +263,18 @@ def add_url_scheme(addr, verify=False, cert=None):
     return url
 
 
-def soap_request(addr, data, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def _encode_part(part: str) -> str:
+    """Percent-Encode identifier part."""
+    return parse.quote(part, safe='')
+
+
+def soap_request(
+        addr: str, data: str, timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> tuple[requests.Response, ElementTree.Element]:
     """X-Road SOAP request.
     Return tuple: (response, xml_root).
     """
-    url = add_url_scheme(addr, verify=verify, cert=cert)
+    url = _add_url_scheme(addr, verify=verify, cert=cert)
     headers = {'content-type': 'text/xml'}
     try:
         response = requests.post(
@@ -170,19 +288,25 @@ def soap_request(addr, data, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         raise XrdInfoError(err) from err
 
     # Searching for SOAP envelope and ignoring MIME parts in response
-    envel = re.search(
+    envelope = re.search(
         '<SOAP-ENV:Envelope.+</SOAP-ENV:Envelope>', response.text, re.DOTALL)
+    if envelope is None:
+        raise XrdInfoError('SOAP envelope was not found in response')
+
     try:
-        root = ElementTree.fromstring(envel.group(0))
+        root = ElementTree.fromstring(envelope.group(0))
     except (AttributeError, ElementTree.ParseError) as err:
         raise XrdInfoError('Received incorrect SOAP response') from err
-    if root.find('.//faultstring') is not None:
-        raise SoapFaultError(root.find('.//faultstring').text)
+    fault_string = root.find('.//faultstring')
+    if fault_string is not None:
+        raise SoapFaultError(fault_string.text)
 
     return response, root
 
 
-def rest_get_request(url, client_header, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def rest_get_request(
+        url: str, client_header: str, timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> requests.Response:
     """X-Road REST GET request."""
     headers = {'X-Road-Client': client_header, 'accept': 'application/json'}
     try:
@@ -201,19 +325,22 @@ def rest_get_request(url, client_header, timeout=DEFAULT_TIMEOUT, verify=False, 
         return response
     except requests.exceptions.Timeout as err:
         raise RequestTimeoutError(err) from err
-    except XrdInfoError as err:
-        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
-        raise err
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def shared_params_ss(
+        addr: str, instance: str | None = None, timeout: float = DEFAULT_TIMEOUT,
+        verify: bool | str = False, cert: str | tuple[str, str] | None = None) -> str:
     """Get shared-params.xml content from local Security Server.
     By default, return info about local X-Road instance.
     """
     try:
-        url = add_url_scheme(addr, verify=verify, cert=cert)
+        url = _add_url_scheme(addr, verify=verify, cert=cert)
         # Add '/verificationconf' if path is missing
         if parse.urlsplit(url).path == '':
             url = url + '/verificationconf'
@@ -228,26 +355,26 @@ def shared_params_ss(addr, instance=None, timeout=DEFAULT_TIMEOUT, verify=False,
             if ident is None:
                 # Use local instance configuration
                 with ver_conf_zip.open('verificationconf/instance-identifier') as ident_file:
-                    ident = ident_file.read()
-                ident = ident.decode('utf-8')
+                    ident = ident_file.read().decode('utf-8')
             with ver_conf_zip.open(
                     f'verificationconf/{ident}/shared-params.xml') as shared_params_file:
-                shared_params = shared_params_file.read()
-        return shared_params.decode('utf-8')
+                return shared_params_file.read().decode('utf-8')
     except requests.exceptions.Timeout as err:
         raise RequestTimeoutError(err) from err
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def shared_params_cs(
+        addr: str, timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> str:
     """Get shared-params.xml content from Central Server/Configuration
     Proxy.
     Global configuration is not validated, use shared_params_ss whenever
     possible.
     """
     try:
-        url = add_url_scheme(addr, verify=verify, cert=cert)
+        url = _add_url_scheme(addr, verify=verify, cert=cert)
         # Add '/internalconf' if path is missing
         if parse.urlsplit(url).path == '':
             url = url + '/internalconf'
@@ -258,6 +385,8 @@ def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         # Configuration Proxy uses lowercase for 'Content-location'
         search_res = re.search(
             'Content-location: (/.+/shared-params.xml)', global_conf.text, re.IGNORECASE)
+        if search_res is None:
+            raise XrdInfoError('Shared parameters URI was not found')
         url2 = parse.urljoin(url, search_res.group(1))
         shared_params_response = requests.get(url2, timeout=timeout, verify=verify, cert=cert)
         shared_params_response.raise_for_status()
@@ -265,63 +394,79 @@ def shared_params_cs(addr, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
         return shared_params_response.text
     except requests.exceptions.Timeout as err:
         raise RequestTimeoutError(err) from err
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def members(shared_params):
+def members(shared_params: str) -> Iterator[tuple[str, str, str]]:
     """List Members in shared_params.
     Return tuple: (xRoadInstance, memberClass, memberCode).
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for member in root.findall(MEMBER_PATH):
-            member_class = '' + member.find(MEMBER_CLASS_PATH).text
-            member_code = '' + member.find(MEMBER_CODE_PATH).text
+        instance = _instance_identifier(root)
+        for member in _members(root):
+            member_class = _member_class(member)
+            member_code = _member_code(member)
             yield instance, member_class, member_code
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def subsystems(shared_params):
+def subsystems(shared_params: str) -> Iterator[tuple[str, str, str, str]]:
     """List Subsystems in shared_params.
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode).
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for member in root.findall(MEMBER_PATH):
-            member_class = '' + member.find(MEMBER_CLASS_PATH).text
-            member_code = '' + member.find(MEMBER_CODE_PATH).text
-            for subsystem in member.findall(SUBSYSTEM_PATH):
-                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
+        instance = _instance_identifier(root)
+        for member in _members(root):
+            member_class = _member_class(member)
+            member_code = _member_code(member)
+            for subsystem in _subsystems(member):
+                subsystem_code = _subsystem_code(subsystem)
                 yield instance, member_class, member_code, subsystem_code
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def subsystems_with_membername(shared_params):
+def subsystems_with_membername(shared_params: str) -> Iterator[tuple[str, str, str, str, str]]:
     """List Subsystems in shared_params with Member name.
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode, MemberName).
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for member in root.findall(MEMBER_PATH):
-            member_class = '' + member.find(MEMBER_CLASS_PATH).text
-            member_code = '' + member.find(MEMBER_CODE_PATH).text
-            member_name = '' + member.find('./name').text
-            for subsystem in member.findall(SUBSYSTEM_PATH):
-                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
+        instance = _instance_identifier(root)
+        for member in _members(root):
+            member_class = _member_class(member)
+            member_code = _member_code(member)
+            member_name = _member_name(member)
+            for subsystem in _subsystems(member):
+                subsystem_code = _subsystem_code(subsystem)
                 yield instance, member_class, member_code, subsystem_code, member_name
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def registered_subsystems(shared_params):
+def registered_subsystems(shared_params: str) -> Iterator[tuple[str, str, str, str]]:
     """List Subsystems in shared_params that are attached to Security
     Server (registered).
     Return tuple: (xRoadInstance, memberClass, memberCode,
@@ -329,20 +474,25 @@ def registered_subsystems(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for member in root.findall(MEMBER_PATH):
-            member_class = '' + member.find(MEMBER_CLASS_PATH).text
-            member_code = '' + member.find(MEMBER_CODE_PATH).text
-            for subsystem in member.findall(SUBSYSTEM_PATH):
-                subsystem_id = subsystem.attrib['id']
-                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
-                if root.findall(f'./securityServer[client="{subsystem_id}"]'):
+        instance = _instance_identifier(root)
+        for member in _members(root):
+            member_class = _member_class(member)
+            member_code = _member_code(member)
+            for subsystem in _subsystems(member):
+                subsystem_id = _subsystem_id(subsystem)
+                subsystem_code = _subsystem_code(subsystem)
+                if _security_servers(root, subsystem_id):
                     yield instance, member_class, member_code, subsystem_code
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def subsystems_with_server(shared_params):
+def subsystems_with_server(shared_params: str) -> Iterator[
+       tuple[str, str, str, str, str, str, str, str, str] | tuple[str, str, str, str]]:
     """List Subsystems in shared_params with Security Server
     identifiers.
     Return tuple of 9 identifiers for each Security Server that has
@@ -355,32 +505,36 @@ def subsystems_with_server(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for member in root.findall(MEMBER_PATH):
-            member_class = '' + member.find(MEMBER_CLASS_PATH).text
-            member_code = '' + member.find(MEMBER_CODE_PATH).text
-            for subsystem in member.findall(SUBSYSTEM_PATH):
-                subsystem_id = subsystem.attrib['id']
-                subsystem_code = '' + subsystem.find(SUBSYSTEM_CODE_PATH).text
+        instance = _instance_identifier(root)
+        for member in _members(root):
+            member_class = _member_class(member)
+            member_code = _member_code(member)
+            for subsystem in _subsystems(member):
+                subsystem_id = _subsystem_id(subsystem)
+                subsystem_code = _subsystem_code(subsystem)
                 server_found = False
-                for server in root.findall(f'./securityServer[client="{subsystem_id}"]'):
-                    owner_id = server.find('./owner').text
-                    owner = root.find(f'./member[@id="{owner_id}"]')
-                    owner_class = '' + owner.find(MEMBER_CLASS_PATH).text
-                    owner_code = '' + owner.find(MEMBER_CODE_PATH).text
-                    server_code = '' + server.find('./serverCode').text
-                    address = '' + server.find('./address').text
+                for server in _security_servers(root, subsystem_id):
+                    owner_id = _server_owner_id(server)
+                    owner = _member(root, owner_id)
+                    owner_class = _member_class(owner)
+                    owner_code = _member_code(owner)
+                    server_code = _server_code(server)
+                    address = _server_address(server)
                     yield (
                         instance, member_class, member_code, subsystem_code, instance, owner_class,
                         owner_code, server_code, address)
                     server_found = True
                 if not server_found:
                     yield instance, member_class, member_code, subsystem_code
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def servers(shared_params):
+def servers(shared_params: str) -> Iterator[tuple[str, str, str, str, str]]:
     """List Security Servers in shared_params.
     Return tuple: (Server Owners xRoadInstance,
     Server Owners memberClass, Server Owners memberCode, serverCode,
@@ -388,26 +542,29 @@ def servers(shared_params):
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        instance = '' + root.find(INSTANCE_IDENTIFIER_PATH).text
-        for server in root.findall('./securityServer'):
-            owner_id = server.find('./owner').text
-            owner = root.find(f'./member[@id="{owner_id}"]')
-            member_class = '' + owner.find(MEMBER_CLASS_PATH).text
-            member_code = '' + owner.find(MEMBER_CODE_PATH).text
-            server_code = '' + server.find('./serverCode').text
-            address = '' + server.find('./address').text
+        instance = _instance_identifier(root)
+        for server in _security_servers(root):
+            owner_id = _server_owner_id(server)
+            owner = _member(root, owner_id)
+            member_class = _member_class(owner)
+            member_code = _member_code(owner)
+            server_code = _server_code(server)
+            address = _server_address(server)
             yield instance, member_class, member_code, server_code, address
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def addr_ips(address):
+def addr_ips(address: str) -> Iterator[str]:
     """Resolve DNS name to IP addresses.
     Unresolved DNS names are silently ignored.
     """
     try:
-        for ip_address in socket.gethostbyname_ex(address)[2]:
-            yield '' + ip_address
+        yield from socket.gethostbyname_ex(address)[2]
     except socket.gaierror:
         # Ignoring DNS name not found error
         pass
@@ -415,23 +572,27 @@ def addr_ips(address):
         raise XrdInfoError(err) from err
 
 
-def servers_ips(shared_params):
+def servers_ips(shared_params: str) -> Iterator[str]:
     """List IP addresses of Security Servers in shared_params.
     Unresolved DNS names are silently ignored.
     """
     try:
         root = ElementTree.fromstring(shared_params)
-        for server in root.findall('./securityServer'):
-            address = server.find('address').text
-            for ip_address in addr_ips(address):
-                yield '' + ip_address
+        for server in _security_servers(root):
+            address = _server_address(server)
+            yield from addr_ips(address)
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
 def methods(
-        addr, client, producer, method='listMethods', timeout=DEFAULT_TIMEOUT, verify=False,
-        cert=None):
+        addr: str, client: Sequence[str], producer: Sequence[str], method: str = 'listMethods',
+        timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> Iterator[tuple[str, str, str, str, str, str]]:
     """Get X-Road listMethods or allowedMethods response.
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode, serviceCode, serviceVersion).
@@ -444,35 +605,43 @@ def methods(
         data = REQUEST_SUBSYSTEM_TEMPL.format(
             client=client, service=producer, uuid=uuid.uuid4(), service_code=method, body=body)
     else:
-        return
+        raise XrdInfoError('Incorrect client or producer identifier length')
 
     _, root = soap_request(addr, data, timeout=timeout, verify=verify, cert=cert)
     try:
         for service in root.findall(f'.//xrd:{method}Response/xrd:service', NS):
+            subsystem_code_el = service.find('./id:subsystemCode', NS)
+            service_version_el = service.find('./id:serviceVersion', NS)
             result = {
-                'xRoadInstance': service.find('./id:xRoadInstance', NS).text,
-                'memberClass': service.find('./id:memberClass', NS).text,
-                'memberCode': service.find('./id:memberCode', NS).text,
+                'xRoadInstance': _fail_none(_fail_none(
+                    service.find('./id:xRoadInstance', NS)).text),
+                'memberClass': _fail_none(_fail_none(service.find('./id:memberClass', NS)).text),
+                'memberCode': _fail_none(_fail_none(service.find('./id:memberCode', NS)).text),
                 # Element subsystemCode may be missing
                 'subsystemCode':
-                    service.find('./id:subsystemCode', NS).text
-                    if service.find('./id:subsystemCode', NS) is not None
+                    _fail_none(subsystem_code_el.text)
+                    if subsystem_code_el is not None
                     else '',
-                'serviceCode': service.find('./id:serviceCode', NS).text,
+                'serviceCode': _fail_none(_fail_none(service.find('./id:serviceCode', NS)).text),
                 # Element serviceVersion may be missing
                 'serviceVersion':
-                    service.find('./id:serviceVersion', NS).text
-                    if service.find('./id:serviceVersion', NS) is not None
+                    _fail_none(service_version_el.text)
+                    if service_version_el is not None
                     else ''}
             yield (result['xRoadInstance'], result['memberClass'], result['memberCode'],
                    result['subsystemCode'], result['serviceCode'], result['serviceVersion'])
-    except AttributeError as err:
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
+    except Exception as err:
         raise XrdInfoError(err) from err
 
 
 def methods_rest(
-        addr, client, producer, method='listMethods', timeout=DEFAULT_TIMEOUT, verify=False,
-        cert=None):
+        addr: str, client: Sequence[str], producer: Sequence[str], method: str = 'listMethods',
+        timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> Iterator[tuple[str, str, str, str, str]]:
     """Get X-Road listMethods or allowedMethods response.
     Return tuple: (xRoadInstance, memberClass, memberCode,
     subsystemCode, serviceCode).
@@ -482,9 +651,9 @@ def methods_rest(
     elif len(client) == 4 and len(producer) == 4:
         client_header = identifier(client[:4])
     else:
-        return
+        raise XrdInfoError('Incorrect client or producer identifier length')
 
-    url = add_url_scheme(addr, verify=verify, cert=cert)
+    url = _add_url_scheme(addr, verify=verify, cert=cert)
     url = parse.urljoin(url, f'/{XRD_REST_VERSION}/{identifier(producer)}/{method}')
     response = rest_get_request(url, client_header, timeout=timeout, verify=verify, cert=cert)
 
@@ -493,33 +662,40 @@ def methods_rest(
         for service in services['service']:
             yield (service['xroad_instance'], service['member_class'], service['member_code'],
                    service['subsystem_code'], service['service_code'])
-    except XrdInfoError as err:
-        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
-        raise err
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def wsdl(
+        addr: str, client: Sequence[str], service: Sequence[str],
+        timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> str:
     """Get X-Road getWsdl response."""
+    if len(service) != 6:
+        raise XrdInfoError('Incorrect service identifier length')
+
     if service[5]:
         # Service with version
         body = GETWSDL_BODY_TEMPL.format(service_code=service[4], service_version=service[5])
     else:
         body = GETWSDL_BODY_TEMPL_NOVERSION.format(service_code=service[4])
 
-    if (len(client) == 3 or client[3] == '') and len(service) == 6:
+    if len(client) == 3 or client[3] == '':
         # Request as member
         data = REQUEST_MEMBER_TEMPL.format(
             client=client, service=service, uuid=uuid.uuid4(), service_code=GETWSDL_SERVICE_CODE,
             body=body)
-    elif len(client) == 4 and len(service) == 6:
+    elif len(client) == 4:
         # Request as subsystem
         data = REQUEST_SUBSYSTEM_TEMPL.format(
             client=client, service=service, uuid=uuid.uuid4(), service_code=GETWSDL_SERVICE_CODE,
             body=body)
     else:
-        return None
+        raise XrdInfoError('Incorrect client identifier length')
 
     wsdl_response, _ = soap_request(addr, data, timeout=timeout, verify=verify, cert=cert)
 
@@ -532,43 +708,51 @@ def wsdl(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None
     raise XrdInfoError('WSDL not found')
 
 
-def wsdl_methods(wsdl_doc):
+def wsdl_methods(wsdl_doc: str) -> Iterator[tuple[str, str]]:
     """Return list of methods in WSDL."""
     try:
         root = ElementTree.fromstring(wsdl_doc)
         for operation in root.findall('.//wsdl:binding/wsdl:operation', NS):
-            version = operation.find('./xrd:version', NS).text \
-                if operation.find('./xrd:version', NS) is not None else ''
+            version_el = operation.find('./xrd:version', NS)
+            version = _fail_none(version_el.text) if version_el is not None else ''
             if 'name' in operation.attrib:
-                yield '' + operation.attrib['name'], '' + version
+                yield operation.attrib['name'], version
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def openapi(addr, client, service, timeout=DEFAULT_TIMEOUT, verify=False, cert=None):
+def openapi(
+        addr: str, client: Sequence[str], service: Sequence[str],
+        timeout: float = DEFAULT_TIMEOUT, verify: bool | str = False,
+        cert: str | tuple[str, str] | None = None) -> str:
     """Get X-Road getOpenAPI response."""
     if (len(client) == 3 or client[3] == '') and len(service) == 5:
         client_header = identifier(client[:3])
     elif len(client) == 4 and len(service) == 5:
         client_header = identifier(client[:4])
     else:
-        return None
+        raise XrdInfoError('Incorrect client or service identifier length')
 
-    url = add_url_scheme(addr, verify=verify, cert=cert)
+    url = _add_url_scheme(addr, verify=verify, cert=cert)
     url = parse.urljoin(
         url, f'/{XRD_REST_VERSION}/{identifier(service[:4])}'
-             f'/getOpenAPI?serviceCode={encode_part(service[4])}')
+             f'/getOpenAPI?serviceCode={_encode_part(service[4])}')
     try:
         return rest_get_request(
             url, client_header, timeout=timeout, verify=verify, cert=cert).text
-    except XrdInfoError as err:
-        # Re-raising XrdInfo sub-exception before it get overwritten by generic XrdInfoError
-        raise err
+    except XrdInfoError:
+        # Re-raising XrdInfo sub-exception before it gets
+        # overwritten by generic XrdInfoError
+        raise
     except Exception as err:
         raise XrdInfoError(err) from err
 
 
-def load_openapi(openapi_doc):
+def load_openapi(openapi_doc: str) -> tuple[Any, str]:
     """Load OpenAPI description into Python object.
     Return tuple: (data, document_type).
     """
@@ -578,13 +762,13 @@ def load_openapi(openapi_doc):
         return data, 'json'
     except json.JSONDecodeError:
         try:
-            data = yaml.load(openapi_doc, Loader=yaml.SafeLoader)
+            data = yaml.safe_load(openapi_doc)
             return data, 'yaml'
         except yaml.YAMLError as err:
             raise XrdInfoError('Can not parse OpenAPI description') from err
 
 
-def openapi_endpoints(openapi_doc):
+def openapi_endpoints(openapi_doc: str) -> list[dict[str, Any]]:
     """Return list of endpoints in OpenAPI."""
     data, _ = load_openapi(openapi_doc)
 
@@ -606,18 +790,13 @@ def openapi_endpoints(openapi_doc):
     return results
 
 
-def encode_part(part):
-    """Percent-Encode identifier part."""
-    return parse.quote(part, safe='')
-
-
-def identifier(items):
+def identifier(items: Sequence[str]) -> str:
     """Convert list/tuple to slash separated string representation of
     identifier. Each identifier part is Percent-Encoded.
     """
-    return '/'.join(map(encode_part, items))
+    return '/'.join(map(_encode_part, items))
 
 
-def identifier_parts(ident_str):
+def identifier_parts(ident_str: str) -> list[str]:
     """Convert identifier to list of parts."""
     return list(map(parse.unquote, ident_str.split('/')))
