@@ -26,28 +26,28 @@ to "grep" the contents of messagelog files.
 cat_mlog.sh that additionally outputs message SigningTime.
 
 ## Global Configuration and Metadata services
-[xrdinfo.py](xrdinfo/xrdinfo.py) - Python module that can be imported
-and used in any Python3 application. It implements:
-* loading of global configuration from Security Server, Central Server
-  or Configuration Proxy;
-* parsing of shared_params.xml;
-* listMethods and allowedMethods X-Road requests for SOAP;
-* listMethods and allowedMethods X-Road requests for REST;
-* getWsdl X-Road request.
-* getOpenApi X-Road request.
+[xrdinfo](xrdinfo-src/xrdinfo) - Python module that can be imported and used in any Python3 application.
+It implements the following:
+* Loading of global configuration from Security Server, Central Server, or Configuration Proxy.
+* Parsing of shared_params.xml and returning various elements.
+* Handling of listMethods and allowedMethods X-Road requests for SOAP.
+* Handling of listMethods and allowedMethods X-Road requests for REST.
+* Handling of getWsdl X-Road requests.
+* Handling of getOpenApi X-Road requests.
+* Listing endpoints from OpenAPI documents.
 
 xrdinfo module can be installed using pip:
 ```bash
 # From checked out repository
-pip install xrdinfo/
+pip install xrdinfo-src/
 # Or directly from github
-pip install 'xrdinfo @ git+https://github.com/ria-ee/X-Road-scripts.git@main#subdirectory=xrdinfo'
+pip install 'xrdinfo @ git+https://github.com/ria-ee/X-Road-scripts.git@main#subdirectory=xrdinfo-src'
 ```
 
 There are also some scripts that use xrdinfo module. Note that output
 identifiers consist of slash separated Percent-Encoded parts to be
 compatible with X-Road REST identifiers:
-* [xrd_all_methods.py](xrdinfo/xrd_all_methods.py) - Returns the list of
+* [xrd_all_methods.py](xrdinfo-src/xrd_all_methods.py) - Returns the list of
   all or allowed (services with access rights granted to the issuer of
   the X-Road request) methods (services) in X-Road instance.
 * ~~xrd_all_wsdls.py~~ - Downloads all WSDL documents of specified X-Road
@@ -55,31 +55,31 @@ compatible with X-Road REST identifiers:
   was moved to repositories:
   * https://koodivaramu.eesti.ee/x-tee/x-road-catalogue-collector
   * https://koodivaramu.eesti.ee/x-tee/x-road-catalogue
-* [xrd_methods.py](xrdinfo/xrd_methods.py) - Returns the list of methods
+* [xrd_methods.py](xrdinfo-src/xrd_methods.py) - Returns the list of methods
   provided or allowed by a specified X-Road Member.
-* [xrd_registered_subsystems.py](xrdinfo/xrd_registered_subsystems.py) -
+* [xrd_registered_subsystems.py](xrdinfo-src/xrd_registered_subsystems.py) -
   Returns the list of all Subsystems in X-Road instance that are
   registered in at least one Security Server.
-* [xrd_servers_ips.py](xrdinfo/xrd_servers_ips.py) - Returns the list of
+* [xrd_servers_ips.py](xrdinfo-src/xrd_servers_ips.py) - Returns the list of
   IP addresses of all Security Servers in X-Road instance. Can be used
   to configure Security Servers firewall.
-* [xrd_servers.py](xrdinfo/xrd_servers.py) - Returns the list of all
+* [xrd_servers.py](xrdinfo-src/xrd_servers.py) - Returns the list of all
   Security Servers in X-Road instance.
-* [xrd_subsystems.py](xrdinfo/xrd_subsystems.py) - Returns the list of
+* [xrd_subsystems.py](xrdinfo-src/xrd_subsystems.py) - Returns the list of
   all Subsystems in X-Road instance.
-* [xrd_members.py](xrdinfo/xrd_members.py) - Returns the list of
+* [xrd_members.py](xrdinfo-src/xrd_members.py) - Returns the list of
   all Members in X-Road instance.
-* [xrd_subsystems_with_membername.py](xrdinfo/xrd_subsystems_with_membername.py) -
+* [xrd_subsystems_with_membername.py](xrdinfo-src/xrd_subsystems_with_membername.py) -
   Returns the list of all Subsystems in X-Road instance and additionally
   adding Member names to that list.
-* [xrd_subsystems_with_server.py](xrdinfo/xrd_subsystems_with_server.py) - 
+* [xrd_subsystems_with_server.py](xrdinfo-src/xrd_subsystems_with_server.py) - 
   Returns the list of all Subsystems in X-Road instance and additionally
   adding Security Servers to that list.
-* [xrd_wsdl.py](xrdinfo/xrd_wsdl.py) - Returns the service WSDL using
+* [xrd_wsdl.py](xrdinfo-src/xrd_wsdl.py) - Returns the service WSDL using
   X-Road request. This script can be useful when
   http://SECURITYSERVER/wsdl service is disabled or TLS authentication
   is required to access Security Server.
-* [xrd_openapi.py](xrdinfo/xrd_openapi.py) - Returns the service OpenAPI
+* [xrd_openapi.py](xrdinfo-src/xrd_openapi.py) - Returns the service OpenAPI
   description using X-Road request.
 
 ## Health and Environment monitoring
