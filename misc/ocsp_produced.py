@@ -64,7 +64,7 @@ def main():
                         produced = time.strftime('%Y-%m-%d %H:%M:%S', produced_time)
                         if not args.s:
                             print(f'{produced}\t{key_type}\t{key_id}\t{friendly_name}')
-                        elif not ocsp_time or calendar.timegm(produced_time) > ocsp_time:
+                        elif not ocsp_time or calendar.timegm(produced_time) < ocsp_time:
                             ocsp_time = calendar.timegm(produced_time)
                     elif not args.s:
                         print(f'ERROR\t{key_type}\t{key_id}\t{friendly_name}')
