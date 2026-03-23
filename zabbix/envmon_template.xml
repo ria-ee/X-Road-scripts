@@ -56,7 +56,7 @@ counter = 0
     cert.daysToExp = diffInDays;
     dayOfExp = cert.notAfter.getDate() + '.' + (Number(cert.notAfter.getMonth()) + 1) +'.'+ cert.notAfter.getFullYear()
 // &lt;td&gt; ' + cert.certificateType + '&lt;/td&gt; &lt;th&gt;Tüüp&lt;/th&gt;
-    if (cert.certificateType == 'INTERNAL_IS_CLIENT_TLS'){
+    if (cert.certificateType == 'INTERNAL_IS_CLIENT_TLS' || cert.certificateType == 'SECURITY_SERVER_TLS'){
       continue
     }
     else if (diffInDays &lt; 31 &amp;&amp; 0 &lt; diffInDays) {
@@ -221,7 +221,7 @@ counter = 0
     cert.daysToExp = diffInDays;
     dayOfExp = cert.notAfter.getDate() + '.' + (Number(cert.notAfter.getMonth()) + 1) +'.'+ cert.notAfter.getFullYear()
 // &lt;td&gt; ' + cert.certificateType + '&lt;/td&gt; &lt;th&gt;Tüüp&lt;/th&gt;
-    if (cert.certificateType == 'INTERNAL_IS_CLIENT_TLS'){
+    if (cert.certificateType == 'INTERNAL_IS_CLIENT_TLS' || cert.certificateType == 'SECURITY_SERVER_TLS'){
       continue
 }
     else if (diffInDays &lt; 31 &amp;&amp; 0 &lt; diffInDays) {
