@@ -1,26 +1,48 @@
 """X-Road informational module.
-This module can be used to query various types of information about
+This module can be user to query various types of information about
 X-Road Members, Subsystems, Servers, Services and Service descriptions.
 """
 
 __all__ = [
-    'XrdInfoError', 'RequestTimeoutError', 'SoapFaultError', 'NotOpenapiServiceError',
-    'OpenapiReadError', 'soap_request', 'rest_get_request', 'shared_params_ss', 'shared_params_cs',
-    'members', 'subsystems', 'subsystems_with_membername', 'registered_subsystems',
-    'subsystems_with_server', 'servers', 'addr_ips', 'servers_ips', 'methods', 'methods_rest',
-    'wsdl', 'wsdl_methods', 'openapi', 'load_openapi', 'openapi_endpoints', 'identifier',
-    'identifier_parts']
+    'NotOpenapiServiceError',
+    'OpenapiReadError',
+    'RequestTimeoutError',
+    'SoapFaultError',
+    'XrdInfoError',
+    'addr_ips',
+    'identifier',
+    'identifier_parts',
+    'load_openapi',
+    'members',
+    'methods',
+    'methods_rest',
+    'openapi',
+    'openapi_endpoints',
+    'registered_subsystems',
+    'rest_get_request',
+    'servers',
+    'servers_ips',
+    'shared_params_cs',
+    'shared_params_ss',
+    'soap_request',
+    'subsystems',
+    'subsystems_with_membername',
+    'subsystems_with_server',
+    'wsdl',
+    'wsdl_methods',
+]
 
 import json
-from collections.abc import Iterator
-from io import BytesIO
 import re
 import socket
-from typing import Any, Sequence, TypeVar
-from urllib import parse
 import uuid
-from xml.etree import ElementTree
 import zipfile
+from collections.abc import Iterator, Sequence
+from io import BytesIO
+from typing import Any, TypeVar
+from urllib import parse
+from xml.etree import ElementTree
+
 import requests
 import yaml
 
@@ -129,7 +151,7 @@ class SoapFaultError(XrdInfoError):
     """SOAP Fault received."""
 
     def __init__(self, msg: str | None):
-        if str is not None:
+        if msg is not None:
             super().__init__(f'SoapFault: {msg}')
         else:
             super().__init__('SoapFault: <None>')

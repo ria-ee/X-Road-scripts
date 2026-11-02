@@ -4,19 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xrdinfo"
-version = "1.4.0"
+version = "1.4.1"
 authors = [
     { name="Vitali Stupin", email="vitali.stupin@ria.ee" },
 ]
 description = "X-Road informational module"
-readme = "README.md"
 dependencies = [
     "pyyaml",
     "requests"
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
